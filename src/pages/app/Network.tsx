@@ -5,6 +5,27 @@ import cytoscape from "cytoscape";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
+type EdgeInfo = { s: string; r: string; ids: string[]; n: number; v: number };
+
+/* ── One persistent graph core for the whole session ─────────────────────
+   cytoscape's destroy() (via destroyRenderer()) nulls the core's renderer,
+   but the cose layout always queues one more animation frame after stop();
+   that frame ends in done() → positions() → endBatch() → renderer.notify()
+   and throws "Cannot read properties of null (reading 'notify')" whenever
+   the renderer is already gone. So this page never destroys the core: on
+   unmount we stop it and call unmount(), which swaps in cytoscape's no-op
+   NullRenderer (notify() becomes a counter increment), and the next visit's
+   mount() brings the canvas renderer back on the new container. */
+let core: cytoscape.Core | null = null;
+
+/** Latest per-mount UI callbacks + model. Graph handlers are attached once
+ *  at creation and read from here, so they never go stale or stack up. */
+const bridge = {
+  setSel: (_id: string | null) => {},
+  setEdge: (_e: EdgeInfo | null) => {},
+  edges: [] as EdgeInfo[],
+};
+
 export default function Network() {
   const ds = useMemo(() => { const a = loadAll(); return a.find((d) => d.id === getSelected()) ?? a[0]; }, []);
   const [q, setQ] = useState("");
@@ -16,14 +37,11 @@ export default function Network() {
   const [maxN, setMaxN] = useState(40);
   const [sel, setSel] = useState<string | null>(null);
   const [sim, setSim] = useState(false);
-  const [edge, setEdge] = useState<{ s: string; r: string; ids: string[]; n: number; v: number } | null>(null);
+  const [edge, setEdge] = useState<EdgeInfo | null>(null);
   const [highlight, setHighlight] = useState<"none" | "cycles" | "fan">("none");
   const cyRef = useRef<HTMLDivElement>(null);
   const cy = useRef<cytoscape.Core | null>(null);
   const layoutRef = useRef<cytoscape.Layouts | null>(null);
-  // Event handlers are attached once to the persistent instance; they read
-  // the latest model through this ref so closures never go stale.
-  const modelRef = useRef<{ edges: { s: string; r: string; ids: string[]; n: number; v: number }[] } | null>(null);
 
   const model = useMemo(() => {
     if (!ds) return null;
@@ -95,27 +113,29 @@ export default function Network() {
     try { layoutRef.current?.stop(); } catch { /* already finished */ }
     layoutRef.current = null;
   }
+  // Publish the (stable) state setters to the module-level bridge so the
+  // once-attached graph handlers can always reach the live component.
+  useEffect(() => {
+    bridge.setSel = setSel;
+    bridge.setEdge = setEdge;
+    return () => { bridge.setSel = () => {}; bridge.setEdge = () => {}; };
+  }, [setSel, setEdge]);
+
   useEffect(() => () => {
     stopLayout();
-    const inst = cy.current;
+    try { core?.stop(); } catch { /* already stopped */ }
+    // Detach instead of destroy(): unmount() swaps in the no-op NullRenderer,
+    // so a cose frame that was already queued drains harmlessly instead of
+    // crashing on a null renderer (see the module comment).
+    try { core?.unmount(); } catch { /* not mounted */ }
+    bridge.edges = [];
     cy.current = null;
-    if (!inst) return;
-    try { inst.stop(); } catch { /* already stopped */ }
-    // Cytoscape's cose loop always queues one more animation frame after
-    // stop(); that frame ends in done() → positions() → endBatch(), which
-    // needs a live renderer — but destroy() nulls it, so destroying
-    // synchronously makes the queued frame crash with
-    // "Cannot read properties of null (reading 'notify')". Let the pending
-    // frame drain against the live instance, then destroy on the next frame.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
-      try { inst.destroy(); } catch { /* already gone */ }
-    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!cyRef.current || !model) return;
-    modelRef.current = model;
+    bridge.edges = model.edges;
     // Stop the previous layout before touching elements: a frame of it may
     // still fire once, and it must not race the element swap below.
     stopLayout();
@@ -124,8 +144,10 @@ export default function Network() {
       ...model.nodes.map((n) => ({ data: { id: n.id, deg: n.deg, lbl: n.lbl } })),
       ...model.edges.map((e, i) => ({ data: { id: `e${i}`, source: e.s, target: e.r, n: e.n, v: Math.round(e.v) } })),
     ];
-    if (!cy.current) {
-      cy.current = cytoscape({
+    const existing = core;
+    let graph: cytoscape.Core;
+    if (!existing || existing.destroyed()) {
+      graph = cytoscape({
         container: cyRef.current,
         elements: els,
       style: [
@@ -138,28 +160,35 @@ export default function Network() {
       ],
       layout: { name: "cose", animate: false, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 24 },
       });
-      cy.current.on("tap", "node", (e) => { setSel(e.target.id()); setEdge(null); });
-      cy.current.on("tap", "edge", (e) => {
+      core = graph;
+      // Attached once for the session; they read live state from `bridge`.
+      graph.on("tap", "node", (e) => { bridge.setSel(e.target.id()); bridge.setEdge(null); });
+      graph.on("tap", "edge", (e) => {
         const d = e.target.data();
-        const m = modelRef.current?.edges.find((x) => x.s === d.source && x.r === d.target) ?? null;
-        setEdge(m ? { s: m.s, r: m.r, ids: m.ids, n: m.n, v: Math.round(m.v) } : null);
+        const m = bridge.edges.find((x) => x.s === d.source && x.r === d.target) ?? null;
+        bridge.setEdge(m ? { s: m.s, r: m.r, ids: m.ids, n: m.n, v: Math.round(m.v) } : null);
       });
-      cy.current.on("tap", (e) => { if (e.target === cy.current) { setSel(null); setEdge(null); } });
-      cy.current.on("mouseover", "node", (e) => {
+      graph.on("tap", (e) => { if (e.target === graph) { bridge.setSel(null); bridge.setEdge(null); } });
+      graph.on("mouseover", "node", (e) => {
         const nb = e.target.closedNeighborhood();
-        cy.current?.elements().not(nb).addClass("dim");
+        core?.elements().not(nb).addClass("dim");
       });
-      cy.current.on("mouseout", "node", () => cy.current?.elements().removeClass("dim"));
+      graph.on("mouseout", "node", () => core?.elements().removeClass("dim"));
     } else {
-      cy.current.batch(() => {
-        cy.current?.elements().remove();
-        cy.current?.add(els);
+      // Returning to the page: re-home the canvas renderer on this mount's
+      // container, then swap in the current model's elements.
+      graph = existing;
+      graph.mount(cyRef.current);
+      graph.batch(() => {
+        graph.elements().remove();
+        graph.add(els);
       });
     }
+    cy.current = graph;
     stopLayout();
-    layoutRef.current = cy.current.layout({ name: "cose", animate: true, animationDuration: 600, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 24, fit: true });
+    layoutRef.current = graph.layout({ name: "cose", animate: true, animationDuration: 600, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 24, fit: true });
     layoutRef.current.run();
-    if (hot && hot.size) cy.current.nodes().filter((n) => hot.has(n.id())).addClass("highlight");
+    if (hot && hot.size) graph.nodes().filter((n) => hot.has(n.id())).addClass("highlight");
     return () => { stopLayout(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]);

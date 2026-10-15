@@ -1,4 +1,4 @@
-import { Card, Empty, PanelTitle, SevBadge, btnGhost, btnPrimary, emit, shortId } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, RiskCharacter, ScoreBar, SevBadge, btnGhost, btnPrimary, emit, shortId } from "@/components/app/Shell";
 import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { runDetection, verifyAlerts, type Alert } from "@/lib/trace/detect";
@@ -97,7 +97,7 @@ function Explorer() {
         <select value={rev} onChange={(e) => setRev(e.target.value)} className="rounded-full border border-input bg-[color:var(--glass)] px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:border-[color:var(--glass-border-hi)]" aria-label="Review status"><option value="">Any status</option><option value="new">new</option><option value="reviewing">reviewing</option><option value="reviewed">reviewed</option><option value="false-positive">false positive</option><option value="escalated">escalated</option></select>
         <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-full border border-input bg-[color:var(--glass)] px-3 py-1.5 text-xs backdrop-blur-md transition-colors hover:border-[color:var(--glass-border-hi)]" aria-label="Method"><option value="">All methods</option>{[...new Set(shown.alerts.map((a) => a.ruleId))].map((c) => <option key={c}>{c}</option>)}</select>
         <span className="self-center text-xs text-muted-foreground">{list.length} of {shown.alerts.length}</span>
-        <button onClick={rerun} className="ml-auto rounded-full bg-[color:var(--primary)] px-4 py-1.5 text-xs font-semibold text-white shadow-[0_8px_24px_-10px_rgba(139,92,246,0.9)] transition-all hover:brightness-110 active:scale-[0.98]">Run monitoring job</button>
+        <button onClick={rerun} className={`${btnPrimary} ml-auto py-1.5 text-xs`}>Run monitoring job</button>
       </div>
       <Card>
         <div className="overflow-x-auto">
@@ -111,12 +111,19 @@ function Explorer() {
                   <td className="mono px-3 py-2 text-xs text-[color:var(--primary)]">{a.id.slice(0, 18)}…</td>
                   <td className="max-w-[280px] truncate px-3 py-2">{a.title}</td>
                   <td className="px-3 py-2">
-                    <SevBadge sev={a.severity} />
+                    <span className="flex items-center gap-2"><RiskCharacter severity={a.severity} size={26} /><SevBadge sev={a.severity} /></span>
                   </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{shown.name}</td>
                   <td className="tnum px-3 py-2">{a.txnIds.length}</td>
-                  <td className="mono max-w-[180px] truncate px-3 py-2 text-xs text-muted-foreground" title={a.entities.slice(0, 2).join(", ")}>{a.entities.slice(0, 2).map(shortId).join(", ")}</td>
-                  <td className="tnum px-3 py-2 font-semibold" title="Risk-priority score, not a probability">{a.score}</td>
+                  <td className="px-3 py-2">
+                    <span className="flex flex-wrap gap-1">
+                      {a.entities.slice(0, 2).map((en) => (
+                        <span key={en} className="mono rounded-full border border-border bg-[color:var(--glass)] px-2 py-0.5 text-[10px] text-muted-foreground" title={en}>{shortId(en).slice(0, 12)}</span>
+                      ))}
+                      {a.entities.length > 2 && <span className="self-center text-[10px] text-muted-foreground">+{a.entities.length - 2}</span>}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2"><ScoreBar score={a.score} /></td>
                   <td className="px-3 py-2 text-xs capitalize text-muted-foreground">{(rv[a.id] ?? "new").replace("-", " ")}</td>
                 </tr>
               ))}

@@ -141,13 +141,60 @@ export function Field({ label, children }: { label: string; children: ReactNode 
 
 export const inputCls =
   "w-full rounded-lg border border-input bg-[color:var(--glass-hi)] px-2.5 py-1.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-[color:var(--ring)]/60";
+/** Dark in-theme primary action: deep glass fill, lit violet edge, glow on hover — never a bright slab of color. */
 export const btnPrimary =
-  "grad-bg inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-[13px] font-semibold text-white shadow-[0_8px_24px_-10px_rgba(139,92,246,0.8)] transition-all hover:shadow-[0_10px_30px_-8px_rgba(236,72,153,0.7)] hover:brightness-110 active:scale-[0.98] disabled:opacity-50 disabled:hover:brightness-100";
+  "inline-flex items-center justify-center gap-1.5 rounded-full border border-[color:var(--primary)]/45 bg-[#141026]/85 px-4 py-2 text-[13px] font-semibold text-[#c4b5fd] backdrop-blur-md transition-all hover:border-[color:var(--primary)] hover:bg-[#1a1333] hover:text-white hover:shadow-[0_0_26px_-6px_rgba(167,139,250,0.75)] active:scale-[0.98] disabled:opacity-40 disabled:hover:shadow-none";
 export const btnGhost =
   "inline-flex items-center justify-center gap-1.5 rounded-full border border-border bg-[color:var(--glass)] px-3.5 py-1.5 text-[13px] font-medium text-foreground backdrop-blur-md transition-all hover:border-[color:var(--glass-border-hi)] hover:bg-[color:var(--glass-hi)] active:scale-[0.98]";
 
 export function num(n: number) {
   return n.toLocaleString("en-IN");
+}
+
+/* ── Risk character ────────────────────────────────────────────────────────
+   A small SVG "mood orb" that reads as fraudulent-or-not at a glance:
+   calm teal smile → violet poker-face → amber frown → rose scowl with a
+   spinning alert ring. Expression, colour and aura all track severity. */
+const RISK_FACES = [
+  { color: "#2dd4bf", label: "looks clean", mouth: "M 10.5 20 Q 16 24.5 21.5 20", brows: null as string | null, ring: false },
+  { color: "#a78bfa", label: "worth a look", mouth: "M 10.5 21 H 21.5", brows: null, ring: false },
+  { color: "#fbbf24", label: "suspicious", mouth: "M 10 22.5 Q 16 17.5 22 22.5", brows: "M 9.4 11.6 13.8 10.2 M 18.2 10.2 22.6 11.6", ring: true },
+  { color: "#fb7185", label: "likely fraudulent", mouth: "M 9.5 22.4 l 2.5 -2 l 2.4 2 l 2.5 -2 l 2.4 2 l 2.6 -2", brows: "M 9 12.2 14 9.6 M 18 9.6 23 12.2", ring: true },
+];
+
+export function riskLevel(sev: string) {
+  return sev === "critical" ? 3 : sev === "high" ? 2 : sev === "medium" ? 1 : 0;
+}
+
+export function RiskCharacter({ severity, size = 30, className = "" }: { severity: string; size?: number; className?: string }) {
+  const f = RISK_FACES[riskLevel(severity)];
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" className={className} role="img" aria-label={`Risk character — ${f.label}`}>
+      <title>{`Risk character — ${f.label}`}</title>
+      {f.ring && (
+        <circle cx="16" cy="16" r="14" fill="none" stroke={f.color} strokeOpacity="0.55" strokeWidth="1" strokeDasharray="3 4"
+          className="ring-spin" style={{ transformBox: "fill-box", transformOrigin: "center" }} />
+      )}
+      <circle cx="16" cy="16" r="12" fill={f.color} fillOpacity="0.14" stroke={f.color} strokeOpacity="0.85" strokeWidth="1.2" />
+      <circle cx="12.4" cy="14.6" r="1.45" fill={f.color} />
+      <circle cx="19.6" cy="14.6" r="1.45" fill={f.color} />
+      {f.brows && <path d={f.brows} stroke={f.color} strokeWidth="1.3" strokeLinecap="round" fill="none" />}
+      <path d={f.mouth} stroke={f.color} strokeWidth="1.35" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/** Compact score meter — replaces bare numbers so priority is read, not counted. */
+export function ScoreBar({ score, w = 56 }: { score: number; w?: number }) {
+  const color = score >= 80 ? "var(--destructive)" : score >= 60 ? "var(--warning)" : "var(--primary)";
+  return (
+    <span className="inline-flex items-center gap-2" title={`Review-priority ${score}/100 — ranks review order, not a probability`}>
+      <span className="relative block h-1.5 overflow-hidden rounded-full bg-muted" style={{ width: w }}>
+        <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${Math.min(100, Math.max(0, score))}%`, background: color }} />
+      </span>
+      <span className="tnum text-[11px] font-semibold" style={{ color }}>{score}</span>
+    </span>
+  );
 }
 
 /** Global compact standard for chart axes and large aggregates: 2_000_000 → "2M",

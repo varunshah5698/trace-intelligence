@@ -130,7 +130,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/studio" element={<App title="AI Data Studio" sub="Deterministic scenario generation with ground-truth manifests."><Studio /></App>} />
                   <Route path="/demo" element={<App title="Demo" sub="Synthetic-data demonstration, explicitly labelled."><Studio /></App>} />
                   <Route path="/monitoring" element={<App title="Transaction Monitoring" sub="Run jobs, review results."><Transactions /></App>} />
-                  <Route path="/rules" element={<App title="Detection Rules" sub="Thresholds, time windows, versions, test status."><GovWrap view="rules" /></App>} />
+                  <Route path="/rules" element={<Navigate to="/models" replace />} />
                   <Route path="/models" element={<App title="Models & Evaluation" sub="Measured metrics on labelled test sets — never invented."><GovWrap view="models" /></App>} />
                   <Route path="/evaluation" element={<App title="Models & Evaluation" sub="Measured metrics on labelled test sets — never invented."><GovWrap view="evaluation" /></App>} />
                   <Route path="/reports" element={<App title="Reports" sub="Generated downloads from actual backend data."><GovWrap view="reports" /></App>} />

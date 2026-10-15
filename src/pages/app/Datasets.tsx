@@ -9,8 +9,8 @@ import { announceAnalysis } from "@/lib/trace/ml";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import { ArrowLeft, ArrowRight, CheckCircle2, FileUp, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router";
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
 
 const FIELD_OPTS: (SemanticField | "")[] = ["", "txn_id", "sender", "receiver", "amount", "currency", "timestamp", "origin_country", "dest_country", "channel", "purpose", "status", "ignore"];
 const MODES = [
@@ -23,16 +23,65 @@ const MODES = [
   { id: "fx", label: "FX normalisation", need: ["amount"] },
 ];
 
+/** Shared upload entry: validate → clean → verify → base wizard state. Used by the library uploader and the wizard. */
+async function fileToWizard(f: File, base: { name: string; desc: string; source: string }): Promise<{ wiz: Wiz } | { error: string }> {
+  if (!/\.csv$/i.test(f.name)) return { error: "Only .csv files are accepted." };
+  if (f.size > 25 * 1024 * 1024) return { error: "File exceeds the 25 MB limit. Split or sample it first." };
+  const text = await f.text();
+  const t = parseCSV(text);
+  if (!t.columns.length) return { error: "No columns found. Check the file." };
+  const prep = prepareTable(t);
+  if (!prep.rows.length) return { error: `No usable rows survived cleaning (${prep.droppedEmpty} empty, ${prep.droppedDuplicates} duplicates). Check the file.` };
+  const sample = { columns: prep.columns, rows: prep.rows.slice(0, 200), delimiter: ",", encodingNote: "" };
+  return {
+    wiz: {
+      step: 2, name: base.name || f.name.replace(/\.csv$/i, ""), desc: base.desc, source: base.source,
+      cols: prep.columns, rows: prep.rows, maps: inferMapping(sample), overrides: {}, cleaning: prep.ops,
+    },
+  };
+}
+
+function UploadCard({ onDone }: { onDone: (w: Wiz) => void }) {
+  const [drag, setDrag] = useState(false);
+  const [busy, setBusy] = useState("");
+  const [name, setName] = useState("");
+  const [source, setSource] = useState("Mixed");
+  async function take(f: File) {
+    setBusy("Reading and cleaning file…");
+    const r = await fileToWizard(f, { name, desc: "", source });
+    if ("error" in r) { alert(r.error); setBusy(""); return; }
+    setBusy("");
+    onDone(r.wiz);
+  }
+  return (
+    <Card className={`transition ${drag ? "border-[color:var(--primary)]" : ""}`}>
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) take(f); }}
+        className="flex flex-wrap items-center gap-4 p-5"
+      >
+        <FileUp className="h-7 w-7 shrink-0 text-muted-foreground" strokeWidth={1.5} />
+        <div className="min-w-[220px] flex-1">
+          <p className="text-sm font-semibold">Upload transaction CSV{busy ? ` · ${busy}` : ""}</p>
+          <p className="mt-0.5 text-[13px] text-muted-foreground">Drag a file here or browse — cleaning, inspection, mapping and analysis continue in one guided flow. Max 25 MB / 20,000 rows.</p>
+        </div>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="Dataset name (optional)" className="w-52 rounded-md border border-input bg-card px-2.5 py-1.5 text-[13px] outline-none" aria-label="Dataset name" />
+        <select value={source} onChange={(e) => setSource(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-[13px]" aria-label="Dataset source">
+          <option>Domestic</option><option>International</option><option>Mixed</option><option>General Financial Data</option>
+        </select>
+        <label className={btnPrimary}>Browse files<input type="file" accept=".csv" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) take(f); e.target.value = ""; }} /></label>
+      </div>
+    </Card>
+  );
+}
+
 export default function Datasets() {
   const nav = useNavigate();
-  const loc = useLocation();
   const saveRemote = useMutation(api.trace.save);
   const [list, setList] = useState<Dataset[]>(loadAll());
-  // /datasets/new opens the upload wizard directly — never the library.
-  const [wizard, setWizard] = useState<null | Wiz>(() => (loc.pathname.endsWith("/new") ? { step: 1, name: "", desc: "", source: "Mixed" } : null));
-  useEffect(() => {
-    if (loc.pathname.endsWith("/new")) setWizard((w) => w ?? { step: 1, name: "", desc: "", source: "Mixed" });
-  }, [loc.pathname]);
+  // Library and upload live on one screen: the uploader above feeds the guided flow below.
+  const [wizard, setWizard] = useState<null | Wiz>(null);
 
   function refresh() { setList(loadAll()); }
   function del(id: string) {
@@ -60,10 +109,10 @@ export default function Datasets() {
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap gap-2">
-        <button onClick={() => setWizard({ step: 1, name: "", desc: "", source: "Mixed" })} className={btnPrimary}>Upload CSV</button>
+      <UploadCard onDone={(w) => setWizard(w)} />
+      <div className="flex flex-wrap items-center gap-2 text-[13px]">
         <button onClick={loadDemo} className={btnGhost}>Use generated sample</button>
-        <Link to="/studio" className="rounded-md px-3.5 py-2 text-[13px] text-[color:var(--primary)] hover:underline">or open AI Data Studio →</Link>
+        <Link to="/studio" className="px-1 text-[color:var(--primary)] hover:underline">or open AI Data Studio →</Link>
       </div>
       <Card>
         <PanelTitle title={`Dataset Library (${list.length})`} sub="Ownership is per-browser in this build; deletion is permanent." />
@@ -121,16 +170,10 @@ function Wizard({ w, setW, onDone, saveRemote }: { w: Wiz; setW: (x: Wiz | null)
   const set = (p: Partial<Wiz>) => setW({ ...w, ...p });
 
   async function handleFile(f: File) {
-    if (!/\.csv$/i.test(f.name)) { alert("Only .csv files are accepted."); return; }
-    if (f.size > 25 * 1024 * 1024) { alert("File exceeds the 25 MB limit. Split or sample it first."); return; }
-    setPhase("Reading file…");
-    const text = await f.text();
-    const t = parseCSV(text);
-    if (!t.columns.length) { alert("No columns found. Check the file."); setPhase(""); return; }
-    const prep = prepareTable(t);
-    if (!prep.rows.length) { alert(`No usable rows survived cleaning (${prep.droppedEmpty} empty, ${prep.droppedDuplicates} duplicates). Check the file.`); setPhase(""); return; }
-    const sample = { columns: prep.columns, rows: prep.rows.slice(0, 200), delimiter: ",", encodingNote: "" };
-    set({ cols: prep.columns, rows: prep.rows, maps: inferMapping(sample), overrides: {}, cleaning: prep.ops, name: w.name || f.name.replace(/\.csv$/i, ""), step: 2 });
+    setPhase("Reading and cleaning file…");
+    const r = await fileToWizard(f, { name: w.name, desc: w.desc, source: w.source });
+    if ("error" in r) { alert(r.error); setPhase(""); return; }
+    set({ ...r.wiz });
     setPhase("");
   }
 

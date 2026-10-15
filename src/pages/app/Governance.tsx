@@ -1,21 +1,16 @@
-import { Card, Empty, PanelTitle, WarnStrip, btnGhost, btnPrimary, emit } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, WarnStrip } from "@/components/app/Shell";
 import { toCSV } from "@/lib/trace/csv";
 import { evaluate, runDetection } from "@/lib/trace/detect";
-import { download, getSelected, loadAll, saveAll, type Dataset } from "@/lib/trace/store";
+import { getSelected, loadAll, type Dataset } from "@/lib/trace/store";
 import { readModelMeta } from "@/lib/trace/ml";
+import { download } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
-const LOGIC: Record<string, string> = {
-  split: "sender groups → 48h sliding windows → 4+ transfers with pairwise deviation within 15% of window mean",
-  velocity: "per-sender daily rate vs own baseline → z above 2.5 on count or value, min 5 transfers history",
-  passthrough: "inbound transfer → 70%+ forwarded within 24h across 1+ onward legs",
-  fan: "distinct counterparties 5+ within 2x window (72h) on either side",
-  cycle: "bounded DFS, max 4 hops over first 5,000 transfers → directed cycle to origin",
-  dormant: "gap of 60+ days between consecutive transfers, then resumed activity",
-  behaviour: "amount z-score above 2.0 vs sender baseline",
-  xborder: "cross-border leg of 500,000+ (reporting units) → corridor novelty + amount review",
-};
+// Detection rules are backend engine configuration. They run on every analysis
+// with versioned defaults but are intentionally not shown to operator roles
+// (bank / government reviewers). Threshold tuning lives with the engineering
+// team; reviewers see methods, evaluation and exports.
 
 function reportButtons(ds: Dataset, evalNow: () => ReturnType<typeof evaluate> | null) {
   const stamp = new Date().toISOString();
@@ -86,18 +81,11 @@ function ModelStatus() {
 }
 
 export default function Governance({ view }: { view: string }) {
-  const [v, setV] = useState(0);
-  const [drawer, setDrawer] = useState<string | null>(null);
-  const [th, setTh] = useState<Record<string, string>>({});
+  const [v] = useState(0);
   const [compare, setCompare] = useState(false);
   const ds = useMemo(() => { const a = loadAll(); return a.find((d) => d.id === getSelected()) ?? a[0]; }, [v]);
   if (!ds) return <Card><Empty title="No dataset selected" body="Upload or generate a dataset first." /></Card>;
 
-  function mutate(fn: (d: Dataset) => void) {
-    const all = loadAll();
-    fn(all.find((x) => x.id === ds.id)!);
-    saveAll(all); emit(); setV((x) => x + 1);
-  }
   function evalNow() {
     if (!ds.manifest) return null;
     const hit = new Set<string>();
@@ -113,8 +101,8 @@ export default function Governance({ view }: { view: string }) {
     })(),
   } : null;
 
-  const tabs = [["rules", "Rules"], ["models", "Models"], ["evaluation", "Evaluation"], ["reports", "Reports"], ["settings", "Settings"]];
-  const show = view === "governance" ? "rules" : view;
+  const tabs = [["models", "Models"], ["evaluation", "Evaluation"], ["reports", "Reports"], ["settings", "Settings"]];
+  const show = view === "governance" || view === "rules" ? "models" : view;
 
   return (
     <div className="space-y-3">
@@ -124,67 +112,6 @@ export default function Governance({ view }: { view: string }) {
         ))}
       </div>
 
-      {(show === "rules") && (
-        <Card>
-          <PanelTitle title="Detection rules" sub="Thresholds and windows are configurable · changes versioned as v1 edits" />
-          <div className="overflow-x-auto">
-            <table className="mt-1 w-full min-w-[880px] text-left text-[13px]">
-              <thead><tr className="border-y border-border text-[11px] uppercase tracking-wider text-muted-foreground">
-                {["Rule", "Category", "Required fields", "Configuration", "Status", "Version", "Test"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}
-              </tr></thead>
-              <tbody>
-                {ds.rules.map((r) => (
-                  <tr key={r.id} className="border-b border-border/50 hover:bg-muted/40">
-                    <td className="px-3 py-2"><button onClick={() => setDrawer(r.id)} className="font-semibold text-left hover:underline">{r.name}</button>
-                      <p className="max-w-[260px] truncate text-xs text-muted-foreground">{r.description}</p></td>
-                    <td className="px-3 py-2 text-muted-foreground">{r.category}</td>
-                    <td className="mono px-3 py-2 text-xs text-muted-foreground">{r.minData.join(", ")}</td>
-                    <td className="px-3 py-2">
-                      <input value={th[r.id] ?? String(Object.values(r.params)[0])} onChange={(e) => setTh({ ...th, [r.id]: e.target.value })}
-                        className="w-28 rounded border border-input bg-background px-1.5 py-1 text-xs" aria-label={r.name + " threshold"} />
-                      <button onClick={() => mutate((d) => {
-                        const t = d.rules.find((x) => x.id === r.id)!;
-                        const k = Object.keys(t.params)[0];
-                        const n = Number(th[r.id]);
-                        if (!Number.isFinite(n)) { alert("Threshold must be a number."); return; }
-                        t.params[k] = n;
-                      })} className="ml-1.5 rounded border border-border px-2 py-1 text-xs hover:bg-muted">Apply</button>
-                    </td>
-                    <td className="px-3 py-2">
-                      <button onClick={() => mutate((d) => { d.rules.find((x) => x.id === r.id)!.enabled = !r.enabled; })}
-                        className={"relative h-5 w-9 rounded-full " + (r.enabled ? "bg-[color:var(--success)]" : "bg-muted")} aria-label={"Toggle " + r.name}>
-                        <span className={"absolute top-0.5 h-4 w-4 rounded-full bg-white transition-all " + (r.enabled ? "left-[18px]" : "left-0.5")} />
-                      </button>
-                    </td>
-                    <td className="mono px-3 py-2 text-xs text-muted-foreground">v1 · {new Date().toISOString().slice(0, 10)}</td>
-                    <td className="px-3 py-2 text-xs text-[color:var(--success)]">passing</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          {drawer && (() => {
-            const r = ds.rules.find((x) => x.id === drawer)!;
-            return (
-              <div className="fixed inset-0 z-50 flex justify-end">
-                <div className="absolute inset-0 bg-black/60" onClick={() => setDrawer(null)} />
-                <aside className="relative h-full w-full max-w-md overflow-y-auto border-l border-border bg-[color:var(--elevated)] p-5">
-                  <h3 className="text-[15px] font-bold">{r.name}</h3>
-                  <p className="mt-1 text-[13px] text-muted-foreground">{r.description}</p>
-                  <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Readable logic</p>
-                  <p className="mono mt-1 rounded border border-border bg-background p-2.5 text-[11px] leading-5">{LOGIC[r.id] ?? "threshold comparison over grouped transfers"}</p>
-                  <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Supported fields</p>
-                  <p className="mono mt-1 text-[11px]">{r.minData.join(", ")}</p>
-                  <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Parameters</p>
-                  <p className="mono mt-1 text-[11px]">{JSON.stringify(r.params)}</p>
-                  <button onClick={() => setDrawer(null)} className={btnGhost + " mt-4 w-full"}>Close</button>
-                </aside>
-              </div>
-            );
-          })()}
-        </Card>
-      )}
-
       {(show === "models" || show === "evaluation") && (
         <div className="space-y-3">
           <WarnStrip>Evaluation results depend on the test dataset and its labels. Synthetic manifests are the only labelled sets in this build.</WarnStrip>
@@ -192,7 +119,7 @@ export default function Governance({ view }: { view: string }) {
             <Card className="p-4">
               <PanelTitle title="Detectors & versions" />
               <div className="mt-2 space-y-1.5 text-[13px]">
-                <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Rule engine</span><span>v1 · 8 rules</span></div>
+                <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Rule engine</span><span>v1 · 8 rules (backend)</span></div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Anomaly (z-score)</span><span>active · transparent baseline</span></div>
                 <div className="flex justify-between gap-3 border-b border-border/50 pb-1.5"><span className="shrink-0 text-muted-foreground">Isolation Forest</span><ModelStatus /></div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Graph signals</span><span>active · 4-hop max cycles, fan 4+</span></div>

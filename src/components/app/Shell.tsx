@@ -6,7 +6,7 @@ import { useTheme } from "next-themes";
 import {
   ArrowLeftRight, Bell, BookOpenCheck, Briefcase, Database, FileUp,
   FlaskConical, History, Landmark, LayoutDashboard, LogOut, Menu,
-  Moon, House, Network, Search, Settings, ShieldAlert, ShieldCheck, Sun, Users, Waypoints, X,
+  Moon, House, Network, Search, Settings, ShieldAlert, Sun, Users, Waypoints, X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
@@ -40,7 +40,6 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
       { to: "/datasets", label: "Dataset Library", icon: Database },
       { to: "/datasets/new", label: "Upload CSV", icon: FileUp },
       { to: "/studio", label: "AI Data Studio", icon: FlaskConical },
-      { to: "/rules", label: "Detection Rules", icon: ShieldCheck },
       { to: "/models", label: "Models & Evaluation", icon: FlaskConical },
       { to: "/reports", label: "Reports", icon: BookOpenCheck },
     ],

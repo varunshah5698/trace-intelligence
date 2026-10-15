@@ -1,6 +1,11 @@
-# TRACE Intelligence (v1 — CSV-first compliance workspace)
+# Aegis (customer portal + financial-intelligence workspace)
 
-Tagline: **Every transaction tells a story. Connect the evidence.**
+Tagline: **Every transaction tells a story.**
+
+Aegis serves the customers of the business: sign up and log in, see your own dashboard,
+browse and search the service catalog, open detail pages, book times, pay at checkout,
+post your own content, and message or comment — with an admin area managing it all.
+The original CSV analysis workspace (datasets, detection, network, FX, cases) is unchanged.
 
 v1 scope: **analyse uploaded CSVs** for a **compliance team**. Minimalism theme, near-monochrome, tabular numerals.
 

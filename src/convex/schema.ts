@@ -58,6 +58,45 @@ const schema = defineSchema(
       createdAt: v.number(),
     }).index("by_created", ["createdAt"]),
 
+    bookings: defineTable({
+      ownerId: v.optional(v.string()),
+      ownerEmail: v.optional(v.string()),
+      catalogId: v.string(),
+      catalogTitle: v.string(),
+      date: v.string(),
+      slot: v.string(),
+      status: v.string(),
+      createdAt: v.number(),
+    }).index("by_created", ["createdAt"]),
+
+    orders: defineTable({
+      ownerId: v.optional(v.string()),
+      ownerEmail: v.optional(v.string()),
+      catalogId: v.string(),
+      catalogTitle: v.string(),
+      amount: v.number(),
+      currency: v.string(),
+      status: v.string(),
+      createdAt: v.number(),
+    }).index("by_created", ["createdAt"]),
+
+    posts: defineTable({
+      ownerId: v.optional(v.string()),
+      ownerEmail: v.optional(v.string()),
+      title: v.string(),
+      body: v.string(),
+      attachmentName: v.optional(v.string()),
+      createdAt: v.number(),
+    }).index("by_created", ["createdAt"]),
+
+    comments: defineTable({
+      ownerId: v.optional(v.string()),
+      ownerEmail: v.optional(v.string()),
+      thread: v.string(),
+      body: v.string(),
+      createdAt: v.number(),
+    }).index("by_thread", ["thread"]),
+
     auditEvents: defineTable({
       ownerId: v.optional(v.string()),
       actor: v.string(),

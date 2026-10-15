@@ -19,6 +19,12 @@ const Studio = lazy(() => import("./pages/app/Studio.tsx"));
 const Detections = lazy(() => import("./pages/app/Detections.tsx"));
 const Network = lazy(() => import("./pages/app/Network.tsx"));
 const Cases = lazy(() => import("./pages/app/Cases.tsx"));
+const Catalog = lazy(() => import("./pages/app/Catalog.tsx"));
+const CatalogDetail = lazy(() => import("./pages/app/CatalogDetail.tsx"));
+const Bookings = lazy(() => import("./pages/app/Bookings.tsx"));
+const Checkout = lazy(() => import("./pages/app/Checkout.tsx"));
+const Community = lazy(() => import("./pages/app/Community.tsx").then((m) => ({ default: m.Community })));
+const Admin = lazy(() => import("./pages/app/Admin.tsx"));
 import { FxConverter, FxMarket } from "./pages/app/Fx.tsx";
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -97,7 +103,13 @@ createRoot(document.getElementById("root")!).render(
               <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
               <Route path="/login" element={<AuthPage redirectAfterAuth="/dashboard" />} />
               <Route path="/register" element={<AuthPage redirectAfterAuth="/dashboard" />} />
-              <Route path="/dashboard" element={<App title="Compliance overview" sub="Real data from the active dataset. Nothing hardcoded."><Overview /></App>} />
+              <Route path="/dashboard" element={<App title="Your dashboard" sub="Welcome back — your data, bookings, and findings at a glance."><Overview /></App>} />
+              <Route path="/catalog" element={<App title="Service catalog" sub="Browse what we can do for you, then book or buy in one click."><Catalog /></App>} />
+              <Route path="/catalog/:id" element={<App title="Service details" sub="Book a time, pay securely, ask questions."><CatalogDetail /></App>} />
+              <Route path="/bookings" element={<App title="Bookings" sub="Schedule a session and manage your calendar."><Bookings /></App>} />
+              <Route path="/checkout" element={<App title="Checkout" sub="Transparent pricing, instant receipts."><Checkout /></App>} />
+              <Route path="/community" element={<App title="Community" sub="Post your data, ask anything, help each other out."><Community /></App>} />
+              <Route path="/admin" element={<App title="Admin area" sub="Bookings, orders, posts, workspace, audit — everything in one place."><Admin /></App>} />
               <Route path="/domestic" element={<App title="Domestic monitoring" sub="Indian transfers — filter by channel, category, priority."><Overview /></App>} />
               <Route path="/international" element={<App title="International monitoring" sub="Cross-border legs, corridors, intermediaries."><Overview /></App>} />
               <Route path="/datasets" element={<App title="Datasets" sub="Upload any CSV, confirm mapping, inspect quality."><Datasets /></App>} />

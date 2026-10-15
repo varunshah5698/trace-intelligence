@@ -151,15 +151,16 @@ export function num(n: number) {
   return n.toLocaleString("en-IN");
 }
 
-/* ── Risk character ────────────────────────────────────────────────────────
-   A small SVG "mood orb" that reads as fraudulent-or-not at a glance:
-   calm teal smile → violet poker-face → amber frown → rose scowl with a
-   spinning alert ring. Expression, colour and aura all track severity. */
-const RISK_FACES = [
-  { color: "#2dd4bf", label: "looks clean", mouth: "M 10.5 20 Q 16 24.5 21.5 20", brows: null as string | null, ring: false },
-  { color: "#a78bfa", label: "worth a look", mouth: "M 10.5 21 H 21.5", brows: null, ring: false },
-  { color: "#fbbf24", label: "suspicious", mouth: "M 10 22.5 Q 16 17.5 22 22.5", brows: "M 9.4 11.6 13.8 10.2 M 18.2 10.2 22.6 11.6", ring: true },
-  { color: "#fb7185", label: "likely fraudulent", mouth: "M 9.5 22.4 l 2.5 -2 l 2.4 2 l 2.5 -2 l 2.4 2 l 2.6 -2", brows: "M 9 12.2 14 9.6 M 18 9.6 23 12.2", ring: true },
+/* ── Severity beacon ────────────────────────────────────────────────────
+   Professional risk indicator that replaces the old mood faces: a signal
+   meter with a track ring, a severity-coloured sweep (22% → 100% across
+   low → critical), and a core glyph — calm dot at low levels, warning bar
+   at high/critical, plus a slow spinning halo only on critical. */
+const SEV_MARKS = [
+  { color: "#2dd4bf", label: "looks clean", sweep: 0.22 },
+  { color: "#8b5cf6", label: "worth a look", sweep: 0.46 },
+  { color: "#fbbf24", label: "suspicious", sweep: 0.74 },
+  { color: "#fb7185", label: "likely fraudulent", sweep: 1 },
 ];
 
 export function riskLevel(sev: string) {
@@ -167,19 +168,31 @@ export function riskLevel(sev: string) {
 }
 
 export function RiskCharacter({ severity, size = 30, className = "" }: { severity: string; size?: number; className?: string }) {
-  const f = RISK_FACES[riskLevel(severity)];
+  const level = riskLevel(severity);
+  const m = SEV_MARKS[level] ?? SEV_MARKS[0];
+  const R = 11.5;
+  const C = 2 * Math.PI * R;
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" className={className} role="img" aria-label={`Risk character — ${f.label}`}>
-      <title>{`Risk character — ${f.label}`}</title>
-      {f.ring && (
-        <circle cx="16" cy="16" r="14" fill="none" stroke={f.color} strokeOpacity="0.55" strokeWidth="1" strokeDasharray="3 4"
+    <svg width={size} height={size} viewBox="0 0 32 32" className={className} role="img" aria-label={`Severity — ${m.label}`}>
+      <title>{`Severity — ${m.label}`}</title>
+      {level >= 3 && (
+        <circle cx="16" cy="16" r="15" fill="none" stroke={m.color} strokeOpacity="0.5" strokeWidth="1" strokeDasharray="3 4"
           className="ring-spin" style={{ transformBox: "fill-box", transformOrigin: "center" }} />
       )}
-      <circle cx="16" cy="16" r="12" fill={f.color} fillOpacity="0.14" stroke={f.color} strokeOpacity="0.85" strokeWidth="1.2" />
-      <circle cx="12.4" cy="14.6" r="1.45" fill={f.color} />
-      <circle cx="19.6" cy="14.6" r="1.45" fill={f.color} />
-      {f.brows && <path d={f.brows} stroke={f.color} strokeWidth="1.3" strokeLinecap="round" fill="none" />}
-      <path d={f.mouth} stroke={f.color} strokeWidth="1.35" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+      <circle cx="16" cy="16" r={R} fill="none" stroke="var(--border)" strokeWidth="2.6" />
+      <circle
+        cx="16" cy="16" r={R} fill="none" stroke={m.color} strokeWidth="2.6" strokeLinecap="round"
+        strokeDasharray={C} strokeDashoffset={C * (1 - m.sweep)} transform="rotate(-90 16 16)"
+      />
+      <circle cx="16" cy="16" r="6.6" fill={m.color} fillOpacity="0.14" stroke={m.color} strokeOpacity="0.55" strokeWidth="1" />
+      {level >= 2 ? (
+        <g>
+          <path d="M16 12.6 V 16.6" stroke={m.color} strokeWidth="2" strokeLinecap="round" />
+          <circle cx="16" cy="19.8" r="1.15" fill={m.color} />
+        </g>
+      ) : (
+        <circle cx="16" cy="16" r="2.2" fill={m.color} />
+      )}
     </svg>
   );
 }

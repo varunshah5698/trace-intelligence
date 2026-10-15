@@ -1,4 +1,4 @@
-import { Card, Empty, PanelTitle, RiskCharacter, SevBadge, btnGhost, btnPrimary, emit, num, shortId } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, RiskCharacter, SevBadge, Sparkline, btnGhost, btnPrimary, emit, fmtAxis, num, shortId } from "@/components/app/Shell";
 import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV, type NormalizedTxn } from "@/lib/trace/csv";
 import { DEFAULT_RULES, runDetection, verifyAlerts, type Alert } from "@/lib/trace/detect";
@@ -558,6 +558,39 @@ function Workbench({ id }: { id: string }) {
   const winDates = txns.map((t) => t.timestamp.slice(0, 10)).sort();
   const window_ = winDates.length ? `${winDates[0]} → ${winDates[winDates.length - 1]}` : "—";
 
+  // Per-person analysis: every named entity's FULL history in this dataset —
+  // flow balance, counterparties, and daily activity rhythm — not just the
+  // implicated transfers. One pass over the dataset per render (small data).
+  const alertTxnSet = new Set(a.txnIds);
+  const seed = a.entities.map((e) => ({ e, sent: 0, recv: 0, out: 0, in: 0, cp: new Set<string>(), daily: new Map<string, number>(), alertHits: 0 }));
+  const byEntity = new Map(seed.map((s) => [s.e, s]));
+  let totalVol = 0;
+  for (const t of d.txns) {
+    totalVol += t.amount;
+    const day = t.timestamp.slice(0, 10);
+    const s = byEntity.get(t.sender);
+    if (s) {
+      s.sent++; s.out += t.amount; s.cp.add(t.receiver);
+      s.daily.set(day, (s.daily.get(day) ?? 0) + 1);
+      if (alertTxnSet.has(t.id)) s.alertHits++;
+    }
+    const r = byEntity.get(t.receiver);
+    if (r && r.e !== t.sender) {
+      r.recv++; r.in += t.amount; r.cp.add(t.sender);
+      r.daily.set(day, (r.daily.get(day) ?? 0) + 1);
+      if (alertTxnSet.has(t.id)) r.alertHits++;
+    }
+  }
+  const people = seed
+    .map((s) => ({
+      id: s.e, sent: s.sent, recv: s.recv, out: s.out, in: s.in,
+      cps: s.cp.size, alertHits: s.alertHits,
+      series: [...s.daily.keys()].sort().map((k) => s.daily.get(k) ?? 0),
+      touchedShare: totalVol ? Math.min(1, (s.out + s.in) / (2 * totalVol)) : 0,
+    }))
+    .sort((x, y) => y.alertHits - x.alertHits || (y.sent + y.recv) - (x.sent + x.recv))
+    .slice(0, 6);
+
   async function act(kind: Review) {
     if (busy) return;
     setBusy(true);
@@ -665,6 +698,48 @@ function Workbench({ id }: { id: string }) {
                 <AmountContext txns={txns} all={d.txns} hex={hex} />
               </div>
             )}
+          </Card>
+
+          {/* per-person graphical analysis */}
+          <Card className="p-5">
+            <PanelTitle title="Entity analysis" sub={`Every person in this signal · full activity in ${d.name}, not only the implicated transfers`} />
+            <div className="mt-3 grid gap-3 sm:grid-cols-2">
+              {people.map((p) => (
+                <Link
+                  key={p.id} to={`/entities/${encodeURIComponent(p.id)}`}
+                  title={`Open ${p.id} in Entity Intelligence`}
+                  className="group rounded-xl border border-border/60 bg-[color:var(--glass)] p-3 backdrop-blur-md transition-all hover:-translate-y-0.5 hover:border-[color:var(--glass-border-hi)] hover:bg-[color:var(--glass-hi)]"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="mono min-w-0 truncate text-[12px] font-semibold">{shortId(p.id)}</span>
+                    <span className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] text-muted-foreground">
+                      {p.out > p.in ? "net sender" : p.in > p.out ? "net receiver" : "balanced"}
+                    </span>
+                  </div>
+                  <div className="mt-2.5 grid grid-cols-3 gap-1 text-center">
+                    {([
+                      ["sent", p.sent, p.out],
+                      ["received", p.recv, p.in],
+                      ["peers", p.cps, p.alertHits],
+                    ] as [string, number, number][]).map(([label, v1, v2]) => (
+                      <div key={label} className="rounded-lg bg-muted/40 px-1 py-1.5">
+                        <p className="display tnum text-[13px] font-bold leading-none">{num(v1)}</p>
+                        <p className="mt-0.5 text-[9px] uppercase tracking-[0.12em] text-muted-foreground">{label}</p>
+                        <p className="tnum text-[9.5px] leading-none text-muted-foreground">{label === "peers" ? `${v2} alerts` : fmtAxis(v2)}</p>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="mt-2.5 flex items-end justify-between gap-2">
+                    <Sparkline data={p.series.length > 1 ? p.series : [0, 0, 0]} color={hex} w={150} h={30} />
+                    <p className="tnum text-right text-[10px] leading-tight text-muted-foreground">
+                      {Math.round(p.touchedShare * 100)}%<br />of volume
+                    </p>
+                  </div>
+                  <p className="mt-1 text-[10px] text-muted-foreground">daily activity · <span className="tnum">{p.series.length}</span> active day{p.series.length === 1 ? "" : "s"}</p>
+                </Link>
+              ))}
+              {people.length === 0 && <p className="col-span-full py-3 text-center text-[13px] text-muted-foreground">No named entities on this signal.</p>}
+            </div>
           </Card>
 
           {/* evidence grid */}

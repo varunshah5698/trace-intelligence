@@ -1,4 +1,4 @@
-import { Card, Empty, PanelTitle, btnGhost, num } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, btnGhost, num, shortId } from "@/components/app/Shell";
 import { download, getSelected, loadAll } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { useMemo, useState } from "react";
@@ -58,8 +58,8 @@ export default function Transactions() {
                   <tr key={t.id} className="cursor-pointer border-b border-border/50 hover:bg-muted/40" onClick={() => setOpen(t.id)}>
                     <td className="mono px-3 py-2 text-xs text-[color:var(--primary)]">{t.id}</td>
                     <td className="tnum whitespace-nowrap px-3 py-2 text-xs text-muted-foreground">{t.timestamp.slice(0, 16).replace("T", " ")}</td>
-                    <td className="mono px-3 py-2 text-xs">{t.sender}</td>
-                    <td className="mono px-3 py-2 text-xs">{t.receiver}</td>
+                    <td className="mono max-w-[160px] truncate px-3 py-2 text-xs" title={t.sender}>{shortId(t.sender)}</td>
+                    <td className="mono max-w-[160px] truncate px-3 py-2 text-xs" title={t.receiver}>{shortId(t.receiver)}</td>
                     <td className="tnum px-3 py-2 font-semibold">{t.amount.toLocaleString("en-IN")}</td>
                     <td className="px-3 py-2">{t.currency}</td>
                     <td className="px-3 py-2 text-muted-foreground">{t.channel}</td>

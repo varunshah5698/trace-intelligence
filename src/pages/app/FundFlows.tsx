@@ -1,4 +1,4 @@
-import { Card, Empty, PanelTitle, inputCls } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, inputCls, shortId } from "@/components/app/Shell";
 import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -62,7 +62,7 @@ export default function FundFlows() {
               {s.path.map((p, j) => (
                 <span key={j} className="flex items-center gap-1.5">
                   {j > 0 && <span className="text-[color:var(--teal)]">→</span>}
-                  <Link to={`/entities/${encodeURIComponent(p)}`} className="mono text-xs hover:underline">{p}</Link>
+                  <Link to={`/entities/${encodeURIComponent(p)}`} className="mono text-xs hover:underline" title={p}>{shortId(p)}</Link>
                 </span>
               ))}
             </div>
@@ -81,7 +81,7 @@ export default function FundFlows() {
               {example.path.map((p, j) => (
                 <span key={j} className="flex items-center gap-1.5">
                   {j > 0 && <span className="text-[color:var(--teal)]">→</span>}
-                  <Link to={`/entities/${encodeURIComponent(p)}`} className="mono text-xs hover:underline">{p}</Link>
+                  <Link to={`/entities/${encodeURIComponent(p)}`} className="mono text-xs hover:underline" title={p}>{shortId(p)}</Link>
                 </span>
               ))}
             </div>

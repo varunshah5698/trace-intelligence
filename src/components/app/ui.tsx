@@ -145,6 +145,12 @@ export const btnGhost =
 export function num(n: number) {
   return n.toLocaleString("en-IN");
 }
+
+/** Short display for long entity IDs ("Rajesh Kumar · HDFC ••4821" → "Rajesh Kumar"). Full value stays in title attributes. */
+export function shortId(id: string) {
+  const i = id.indexOf(" · ");
+  return i > 0 ? id.slice(0, i) : id;
+}
 export function emit() {
   window.dispatchEvent(new Event("trace:update"));
 }

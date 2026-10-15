@@ -1,4 +1,4 @@
-import { Card, Empty, Kpi, PanelTitle, SevBadge, emit, fmtBig, num } from "@/components/app/Shell";
+import { Card, Empty, Kpi, PanelTitle, SevBadge, emit, fmtBig, num, shortId } from "@/components/app/Shell";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
 import { getSelected, loadAll, setSelected } from "@/lib/trace/store";
@@ -133,7 +133,7 @@ export default function Overview() {
   const COLORS = ["#5B8CFF", "#26C6B8", "#F4B544", "#F05252", "#36C995", "#9AA8FF"];
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4">
       {/* filter bar */}
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex overflow-hidden rounded-md border border-border text-[13px]">
@@ -307,7 +307,7 @@ export default function Overview() {
                   <td className="px-4 py-2"><Link to={`/detections/${a.id}`} className="mono text-xs text-[color:var(--primary)] hover:underline">{a.id}</Link></td>
                   <td className="px-4 py-2 text-muted-foreground">{a.category}</td>
                   <td className="px-4 py-2"><SevBadge sev={a.severity} /></td>
-                  <td className="mono max-w-[220px] truncate px-4 py-2 text-xs text-muted-foreground">{a.entities.slice(0, 3).join(", ")}</td>
+                  <td className="mono max-w-[220px] truncate px-4 py-2 text-xs text-muted-foreground" title={a.entities.slice(0, 3).join(", ")}>{a.entities.slice(0, 3).map(shortId).join(", ")}</td>
                   <td className="tnum px-4 py-2">{a.txnIds.length}</td>
                   <td className="tnum px-4 py-2 text-muted-foreground">run time</td>
                   <td className="tnum px-4 py-2 font-semibold">{a.score}</td>

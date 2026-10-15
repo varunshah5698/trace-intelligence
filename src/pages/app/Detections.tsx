@@ -1,4 +1,4 @@
-import { Card, Empty, PanelTitle, SevBadge, btnGhost, btnPrimary, emit } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, SevBadge, btnGhost, btnPrimary, emit, shortId } from "@/components/app/Shell";
 import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { runDetection, verifyAlerts, type Alert } from "@/lib/trace/detect";
@@ -110,7 +110,7 @@ function Explorer() {
                   <td className="px-3 py-2"><SevBadge sev={a.severity} /></td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{shown.name}</td>
                   <td className="tnum px-3 py-2">{a.txnIds.length}</td>
-                  <td className="mono max-w-[180px] truncate px-3 py-2 text-xs text-muted-foreground">{a.entities.slice(0, 2).join(", ")}</td>
+                  <td className="mono max-w-[180px] truncate px-3 py-2 text-xs text-muted-foreground" title={a.entities.slice(0, 2).join(", ")}>{a.entities.slice(0, 2).map(shortId).join(", ")}</td>
                   <td className="tnum px-3 py-2 font-semibold" title="Risk-priority score, not a probability">{a.score}</td>
                   <td className="px-3 py-2 text-xs capitalize text-muted-foreground">{(rv[a.id] ?? "new").replace("-", " ")}</td>
                 </tr>

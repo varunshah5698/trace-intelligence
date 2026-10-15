@@ -1,4 +1,4 @@
-import { Card, Empty, PanelTitle, inputCls, num } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, inputCls, num, shortId } from "@/components/app/Shell";
 import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
@@ -40,7 +40,7 @@ function List() {
             <tbody>
               {rows.map((e) => (
                 <tr key={e.id} className="border-b border-border/50 hover:bg-muted/40">
-                  <td className="px-4 py-2"><Link to={`/entities/${encodeURIComponent(e.id)}`} className="mono text-xs font-semibold text-[color:var(--primary)] hover:underline">{e.id}</Link></td>
+                  <td className="max-w-[220px] truncate px-4 py-2"><Link to={`/entities/${encodeURIComponent(e.id)}`} className="mono text-xs font-semibold text-[color:var(--primary)] hover:underline" title={e.id}>{shortId(e.id)}</Link></td>
                   <td className="tnum px-4 py-2">{num(e.n)}</td>
                   <td className="tnum px-4 py-2">{Math.round(e.inn).toLocaleString("en-IN")}</td>
                   <td className="tnum px-4 py-2">{Math.round(e.out).toLocaleString("en-IN")}</td>

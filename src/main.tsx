@@ -2,7 +2,6 @@ import '@vly-ai/integrations';
 import { Toaster } from "@/components/ui/sonner";
 import { RequireAuth } from "@/components/RequireAuth";
 import { Shell } from "@/components/app/Shell";
-import { VlyToolbar } from "../vly-toolbar-readonly.tsx";
 import { ConvexAuthProvider } from "@convex-dev/auth/react";
 import { ConvexReactClient } from "convex/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -40,13 +39,6 @@ function RouteLoading() {
   );
 }
 
-class ToolbarErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
-  state = { hasError: false };
-  static getDerivedStateFromError() { return { hasError: true }; }
-  componentDidCatch(err: Error) { console.warn("[VlyToolbar] disabled:", err.message); }
-  render() { return this.state.hasError ? null : this.props.children; }
-}
-
 class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean; message: string }> {
   state = { hasError: false, message: "" };
   static getDerivedStateFromError(error: Error) { return { hasError: true, message: error.message || "Unknown error" }; }
@@ -66,7 +58,11 @@ class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, {
   }
 }
 
-const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL as string);
+// Fall back to a placeholder URL when the env var is missing so module init
+// never throws (which would blank the whole preview, including the landing
+// page). Backend-backed screens show their offline state instead.
+const convexUrl = (import.meta.env.VITE_CONVEX_URL as string | undefined) ?? "https://placeholder.convex.cloud";
+const convex = new ConvexReactClient(convexUrl);
 
 function RouteSyncer() {
   const location = useLocation();
@@ -97,7 +93,6 @@ function App({ title, sub, children }: { title: string; sub?: string; children: 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <RootErrorBoundary>
-      <ToolbarErrorBoundary><VlyToolbar /></ToolbarErrorBoundary>
       <ThemeProvider attribute="class" defaultTheme="dark" enableSystem={false}>
         <QueryClientProvider client={queryClient}>
           <ConvexAuthProvider client={convex}>

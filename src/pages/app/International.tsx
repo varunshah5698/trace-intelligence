@@ -55,6 +55,7 @@ export default function International() {
     return [...m.values()].sort((x, y) => y.items.length - x.items.length || (SEVRANK[y.severity] ?? 0) - (SEVRANK[x.severity] ?? 0));
   }, [ds]);
   const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [hideDis, setHideDis] = useState(false);
   const [v, setV] = useState(0);
   void v;
   const store = useReviewStore();
@@ -135,6 +136,10 @@ export default function International() {
           right={
             <div className="flex shrink-0 items-center gap-2">
               <span className="tnum hidden text-xs text-muted-foreground sm:block">{alertCount} signals · {groups.length} groups</span>
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title="Hide groups fully recorded as false positive">
+                <input type="checkbox" checked={hideDis} onChange={(e) => setHideDis(e.target.checked)} className="h-3.5 w-3.5 accent-[color:var(--primary)]" />
+                Hide dismissed
+              </label>
               {groups.length > 0 && (
                 <button onClick={exportAll} className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted" title="Download the whole list as JSON">Export all</button>
               )}
@@ -142,7 +147,7 @@ export default function International() {
           }
         />
         <div className="divide-y divide-border/50">
-          {groups.slice(0, 20).map((g) => {
+          {groups.filter((g) => !hideDis || !dismissed(g)).slice(0, 20).map((g) => {
             const isOpen = !!open[g.key];
             const dis = dismissed(g);
             const actions = (
@@ -169,6 +174,7 @@ export default function International() {
                     <span className="mono font-semibold">{shortId(g.entity)}</span><span className="text-muted-foreground"> · {a.title}</span>
                   </Link>
                   <span className="hidden shrink-0 text-xs text-muted-foreground md:block">{a.category}</span>
+                  {dis && <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">dismissed</span>}
                   {actions}
                 </div>
               );
@@ -183,6 +189,7 @@ export default function International() {
                       <span className="mono font-semibold">{shortId(g.entity)}</span><span className="text-muted-foreground"> · {g.title}</span>
                     </span>
                     <span className="tnum shrink-0 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-semibold" title={`${g.items.length} individual triggers`}>×{g.items.length}</span>
+                    {dis && <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">dismissed</span>}
                     <span className="hidden shrink-0 text-xs text-muted-foreground md:block">{g.category}</span>
                   </button>
                   {actions}

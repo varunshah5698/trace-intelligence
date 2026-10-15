@@ -116,6 +116,13 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
   const [slow, setSlow] = useState(false);
   useEffect(() => { const t = setTimeout(() => setSlow(true), 8000); return () => clearTimeout(t); }, []);
   const offline = slow && probe === undefined;
+  // Shown in the offline banner so the mismatch is diagnosable at a glance
+  // (a hostname is a public endpoint address, not a secret).
+  let backendHost = "(not configured)";
+  try {
+    const u = import.meta.env.VITE_CONVEX_URL as string | undefined;
+    if (u) backendHost = new URL(u).host;
+  } catch { backendHost = "(invalid URL)"; }
   const active = useMemo(() => loadAll().find((d) => d.id === (getSelected() ?? loadAll()[0]?.id)), [datasets, sel, loc.pathname]);
   const unread = active?.alerts.filter((a) => a.severity === "high" || a.severity === "critical").length ?? 0;
   const crumbs = CRUMBS[loc.pathname] ?? ["Workspace", title];
@@ -272,7 +279,7 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
           {offline && (
             <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 px-3 py-2 text-[13px] md:px-5" role="alert">
               <WifiOff className="h-4 w-4 shrink-0 text-[color:var(--warning)]" />
-              <p className="min-w-0 flex-1"><span className="font-semibold">Sync offline</span> <span className="text-muted-foreground">— the app can't reach its backend, so reviews, notes and cases stay on this device only. Check <span className="mono">VITE_CONVEX_URL</span> in Keys and redeploy.</span></p>
+              <p className="min-w-0 flex-1"><span className="font-semibold">Sync offline</span> <span className="text-muted-foreground">— can't reach <span className="mono">{backendHost}</span>, so reviews, notes and cases stay on this device only. Set <span className="mono">VITE_CONVEX_URL</span> to your Convex deployment URL in Keys, then reload.</span></p>
               <button onClick={() => window.location.reload()} className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted">Retry connection</button>
             </div>
           )}

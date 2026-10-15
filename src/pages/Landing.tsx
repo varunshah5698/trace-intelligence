@@ -37,7 +37,7 @@ export default function Landing() {
     <div className="relative min-h-screen overflow-x-clip bg-background font-sans text-foreground antialiased">
       {/* full-page video background, tinted to match the Aegis color scheme */}
       <video
-        className="pointer-events-none fixed inset-0 h-full w-full object-cover"
+        className="pointer-events-none fixed inset-0 h-full w-full object-cover brightness-[.38]"
         src={HERO_VIDEO}
         autoPlay
         muted
@@ -46,8 +46,9 @@ export default function Landing() {
         preload="metadata"
         aria-hidden
       />
-      <div className="pointer-events-none fixed inset-0 bg-[#0a0f18]/80" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-[color:var(--primary)]/15 via-transparent to-[color:var(--teal)]/10" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-[#0a0f18]/88" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-[#0a0f18]/60 via-transparent to-[#0a0f18]/85" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-[color:var(--primary)]/12 via-transparent to-[color:var(--teal)]/10" aria-hidden />
       {/* ambient glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
         <motion.div className="absolute -top-40 left-1/4 h-[28rem] w-[28rem] rounded-full bg-[color:var(--primary)]/15 blur-[130px]"

@@ -1,11 +1,10 @@
-import { Card, Empty, Kpi, PanelTitle, SevBadge, WarnStrip, fmtAxis, shortId } from "@/components/app/Shell";
+import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, btnGhost, fmtAxis, shortId } from "@/components/app/Shell";
+import { FindingCard } from "@/components/app/FindingCard";
 import { download, getSelected, loadAll } from "@/lib/trace/store";
 import type { Alert } from "@/lib/trace/detect";
 import { useReviewStore } from "@/lib/trace/reviews";
 import { useAuth } from "@/hooks/use-auth";
 import { useMemo, useState } from "react";
-import { Link } from "react-router";
-import { ArrowUpRight, ChevronDown, Download, X } from "lucide-react";
 import { toast } from "sonner";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
@@ -54,7 +53,7 @@ export default function International() {
     });
     return [...m.values()].sort((x, y) => y.items.length - x.items.length || (SEVRANK[y.severity] ?? 0) - (SEVRANK[x.severity] ?? 0));
   }, [ds]);
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+  const [detail, setDetail] = useState<IntlGroup | null>(null);
   const [hideDis, setHideDis] = useState(false);
   const [v, setV] = useState(0);
   void v;
@@ -66,7 +65,6 @@ export default function International() {
 
   const maxN = Math.max(1, ...corridors.map((c) => c.n));
 
-  function toggle(key: string) { setOpen((o) => ({ ...o, [key]: !o[key] })); }
   const dismissed = (g: IntlGroup) => g.items.every((a) => store.statusOf(a.id) === "false-positive");
   async function dismissGroup(g: IntlGroup) {
     const actor = String(user?.email ?? "analyst");
@@ -85,7 +83,6 @@ export default function International() {
 
   return (
     <div className="space-y-3">
-      <WarnStrip>Each item below is a review signal, not a confirmed crime. Country, amount, and corridor alone never decide an alert.</WarnStrip>
       <div className="flex flex-wrap gap-2">
         <select value={country} onChange={(e) => setCountry(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Country filter">
           <option value="">All countries</option>{[...new Set([...ds.txns.map((t) => t.origin_country), ...ds.txns.map((t) => t.dest_country)])].map((c) => <option key={c}>{c}</option>)}
@@ -108,7 +105,7 @@ export default function International() {
             {corridors.map((c) => (
               <button key={c.r} onClick={() => setCountry(c.r.split("→")[0])} className="block w-full text-left" title="Filter by origin">
                 <div className="flex justify-between text-xs"><span className="mono font-semibold">{c.r}</span><span className="tnum text-muted-foreground">{c.n} txns · {fmtAxis(Math.round(c.v))}</span></div>
-                <div className="mt-1 h-2 rounded bg-muted"><div className="h-2 rounded bg-[color:var(--teal)]" style={{ width: `${(c.n / maxN) * 100}%` }} /></div>
+                <div className="mt-1 h-2 rounded-full bg-muted"><div className="h-2 rounded-full bg-gradient-to-r from-[#8B5CF6] to-[#C084FC] transition-all duration-700" style={{ width: `${(c.n / maxN) * 100}%` }} /></div>
               </button>
             ))}
             {corridors.length === 0 && <p className="text-[13px] text-muted-foreground">No cross-border transfers in scope — showing a network graph instead of a map avoids fabricating geography.</p>}
@@ -123,7 +120,7 @@ export default function International() {
                 <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} tickFormatter={(v: number) => fmtAxis(v)} />
                 <YAxis type="category" dataKey="c" tick={{ fontSize: 11, fill: "var(--muted-foreground)" }} width={48} />
                 <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-                <Bar dataKey="v" fill="#26C6B8" radius={[0, 3, 3, 0]} />
+                <Bar dataKey="v" fill="#8B5CF6" radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -131,88 +128,59 @@ export default function International() {
       </div>
       <Card>
         <PanelTitle
-          title="International alert list"
-          sub="Grouped by entity — expand a row for individual triggers"
+          title="International findings"
+          sub="One row per account — click for the full picture"
           right={
             <div className="flex shrink-0 items-center gap-2">
-              <span className="tnum hidden text-xs text-muted-foreground sm:block">{alertCount} signals · {groups.length} groups</span>
-              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title="Hide groups fully recorded as false positive">
+              <span className="tnum hidden text-xs text-muted-foreground sm:block">{alertCount} signals · {groups.length} accounts</span>
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground" title="Hide accounts fully recorded as false positive">
                 <input type="checkbox" checked={hideDis} onChange={(e) => setHideDis(e.target.checked)} className="h-3.5 w-3.5 accent-[color:var(--primary)]" />
                 Hide dismissed
               </label>
               {groups.length > 0 && (
-                <button onClick={exportAll} className="rounded-md border border-border px-2.5 py-1.5 text-xs font-medium hover:bg-muted" title="Download the whole list as JSON">Export all</button>
+                <button onClick={exportAll} className="rounded-full border border-border bg-[color:var(--glass)] px-3 py-1.5 text-xs font-medium backdrop-blur-md transition-colors hover:bg-[color:var(--glass-hi)]" title="Download the whole list as JSON">Export all</button>
               )}
             </div>
           }
         />
-        <div className="divide-y divide-border/50">
+        {/* clean rows: account · condition · score. Click for the full card. */}
+        <div className="space-y-1.5 px-3 pb-3 pt-2.5">
           {groups.filter((g) => !hideDis || !dismissed(g)).slice(0, 20).map((g) => {
-            const isOpen = !!open[g.key];
             const dis = dismissed(g);
-            const actions = (
-              <span className="ml-auto flex shrink-0 items-center gap-1">
-                {!dis && (
-                  <button onClick={() => dismissGroup(g)} className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Dismiss group (record as false positive)">
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                )}
-                <button onClick={() => exportGroup(g)} className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Export group (JSON)">
-                  <Download className="h-3.5 w-3.5" />
-                </button>
-                <Link to={`/detections/${g.items[0].id}`} className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="Open in workbench">
-                  <ArrowUpRight className="h-3.5 w-3.5" />
-                </Link>
-              </span>
-            );
-            if (g.items.length === 1) {
-              const a = g.items[0];
-              return (
-                <div key={g.key} className={`flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40 ${dis ? "opacity-50" : ""}`}>
-                  <SevBadge sev={a.severity} />
-                  <Link to={`/detections/${a.id}`} className="min-w-0 flex-1 truncate text-[13px] hover:underline">
-                    <span className="mono font-semibold">{shortId(g.entity)}</span><span className="text-muted-foreground"> · {a.title}</span>
-                  </Link>
-                  <span className="hidden shrink-0 text-xs text-muted-foreground md:block">{a.category}</span>
-                  {dis && <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">dismissed</span>}
-                  {actions}
-                </div>
-              );
-            }
+            const top = g.items.reduce((b, x) => (x.score > b.score ? x : b), g.items[0]);
             return (
-              <div key={g.key} className={dis ? "opacity-50" : ""}>
-                <div className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40">
-                  <button onClick={() => toggle(g.key)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-expanded={isOpen} aria-label={`${isOpen ? "Collapse" : "Expand"} ${g.items.length} triggers for ${g.entity}`}>
-                    <ChevronDown className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${isOpen ? "" : "-rotate-90"}`} />
-                    <SevBadge sev={g.severity} />
-                    <span className="min-w-0 flex-1 truncate text-[13px]">
-                      <span className="mono font-semibold">{shortId(g.entity)}</span><span className="text-muted-foreground"> · {g.title}</span>
-                    </span>
-                    <span className="tnum shrink-0 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-semibold" title={`${g.items.length} individual triggers`}>×{g.items.length}</span>
-                    {dis && <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">dismissed</span>}
-                    <span className="hidden shrink-0 text-xs text-muted-foreground md:block">{g.category}</span>
-                  </button>
-                  {actions}
-                </div>
-                {isOpen && (
-                  <div className="border-t border-border/40 bg-muted/20">
-                    {g.items.map((a) => (
-                      <Link key={a.id} to={`/detections/${a.id}`} className="flex items-center gap-3 py-2 pl-12 pr-4 text-[13px] hover:bg-muted/40">
-                        <SevBadge sev={a.severity} />
-                        <span className="mono truncate text-xs text-muted-foreground">{a.id.slice(0, 14)}…</span>
-                        <span className="tnum shrink-0 text-xs">score {a.score}</span>
-                        <span className="tnum shrink-0 text-xs text-muted-foreground">{a.txnIds.length} txns</span>
-                        <ArrowUpRight className="ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      </Link>
-                    ))}
-                  </div>
+              <button key={g.key} onClick={() => setDetail(g)} disabled={dis}
+                className={`group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-[color:var(--glass)] px-3 py-2.5 text-left backdrop-blur-md transition-all hover:translate-x-0.5 hover:border-[color:var(--glass-border-hi)] ${dis ? "opacity-45 hover:translate-x-0" : ""}`}>
+                <RiskCharacter severity={g.severity} size={28} />
+                <span className="mono min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground group-hover:text-[#c4b5fd]" title={g.entity}>{shortId(g.entity)}</span>
+                <span className="hidden min-w-0 flex-1 truncate text-[12px] text-muted-foreground sm:block">{g.title.split("—")[0].trim()}</span>
+                {g.items.length > 1 && (
+                  <span className="tnum shrink-0 rounded-full border border-border bg-muted/60 px-2 py-0.5 text-[11px] font-semibold text-muted-foreground" title={`${g.items.length} triggers grouped`}>×{g.items.length}</span>
                 )}
-              </div>
+                {dis && <span className="shrink-0 rounded-full border border-border bg-muted px-2 py-0.5 text-[11px] font-medium text-muted-foreground">dismissed</span>}
+                <ScoreBar score={top.score} w={56} />
+              </button>
             );
           })}
-          {groups.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">No international findings. Upload cross-border data or widen the filters.</p>}
+          {groups.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">No international findings. Upload cross-border data or widen the filters.</p>}
         </div>
       </Card>
+      {/* full detail card — everything about one finding, on demand */}
+      {detail && (
+        <FindingCard
+          a={detail.items.reduce((b, x) => (x.score > b.score ? x : b), detail.items[0])}
+          onClose={() => setDetail(null)}
+          note={detail.items.length > 1 ? `${detail.items.length} triggers grouped for this account · showing the highest-priority one` : undefined}
+          extra={
+            <>
+              {!dismissed(detail) && (
+                <button onClick={() => { dismissGroup(detail); setDetail(null); }} className={btnGhost} title="Record every trigger in this group as false positive">Dismiss group</button>
+              )}
+              <button onClick={() => exportGroup(detail)} className={btnGhost} title="Download this group as JSON">Export</button>
+            </>
+          }
+        />
+      )}
     </div>
   );
 }

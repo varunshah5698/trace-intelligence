@@ -18,6 +18,10 @@ export default function Network() {
   const [highlight, setHighlight] = useState<"none" | "cycles" | "fan">("none");
   const cyRef = useRef<HTMLDivElement>(null);
   const cy = useRef<cytoscape.Core | null>(null);
+  const layoutRef = useRef<cytoscape.Layouts | null>(null);
+  // Event handlers are attached once to the persistent instance; they read
+  // the latest model through this ref so closures never go stale.
+  const modelRef = useRef<{ edges: { s: string; r: string; ids: string[]; n: number; v: number }[] } | null>(null);
 
   const model = useMemo(() => {
     if (!ds) return null;
@@ -81,16 +85,37 @@ export default function Network() {
     return hit;
   }, [model, highlight]);
 
+  // One persistent Cytoscape instance for the page lifetime. Destroying and
+  // recreating on every model change leaves animated-layout frames in flight
+  // that fire after destroy and crash inside cytoscape (null renderer).
+  // Instead we swap elements in a batch and stop the previous layout first.
+  function stopLayout() {
+    try { layoutRef.current?.stop(); } catch { /* already finished */ }
+    layoutRef.current = null;
+  }
+  useEffect(() => () => {
+    stopLayout();
+    const inst = cy.current;
+    cy.current = null;
+    if (inst) {
+      try { inst.stop(); } catch { /* noop */ }
+      try { inst.destroy(); } catch { /* noop */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   useEffect(() => {
     if (!cyRef.current || !model) return;
-    cy.current?.destroy();
+    modelRef.current = model;
     const hot = highlight === "none" ? null : highlight === "cycles" ? cycleNodes : fanNodes;
-    cy.current = cytoscape({
-      container: cyRef.current,
-      elements: [
-        ...model.nodes.map((n) => ({ data: { id: n.id, deg: n.deg, lbl: n.lbl } })),
-        ...model.edges.map((e, i) => ({ data: { id: `e${i}`, source: e.s, target: e.r, n: e.n, v: Math.round(e.v) } })),
-      ],
+    const els = [
+      ...model.nodes.map((n) => ({ data: { id: n.id, deg: n.deg, lbl: n.lbl } })),
+      ...model.edges.map((e, i) => ({ data: { id: `e${i}`, source: e.s, target: e.r, n: e.n, v: Math.round(e.v) } })),
+    ];
+    if (!cy.current) {
+      cy.current = cytoscape({
+        container: cyRef.current,
+        elements: els,
       style: [
         { selector: "node", style: { "background-color": "#5B8CFF", label: "data(lbl)", color: "#96A5BA", "font-size": 9, "font-family": "JetBrains Mono, monospace", width: "mapData(deg, 1, 20, 14, 40)", height: "mapData(deg, 1, 20, 14, 40)", "border-width": 1.5, "border-color": "#253247" } },
         { selector: "node.highlight", style: { "background-color": "#F4B544", "border-color": "#F4B544", label: "data(id)" } },
@@ -99,22 +124,31 @@ export default function Network() {
         { selector: "edge", style: { width: "mapData(n, 1, 10, 1, 5)", "line-color": "#3b4c68", "target-arrow-color": "#3b4c68", "target-arrow-shape": "triangle", "curve-style": "bezier", opacity: 0.8 } },
         { selector: "edge:selected", style: { "line-color": "#26C6B8", "target-arrow-color": "#26C6B8", width: 3 } },
       ],
-      layout: { name: "cose", animate: true, animationDuration: 600, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 24 },
-    });
+      layout: { name: "cose", animate: false, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 24 },
+      });
+      cy.current.on("tap", "node", (e) => { setSel(e.target.id()); setEdge(null); });
+      cy.current.on("tap", "edge", (e) => {
+        const d = e.target.data();
+        const m = modelRef.current?.edges.find((x) => x.s === d.source && x.r === d.target) ?? null;
+        setEdge(m ? { s: m.s, r: m.r, ids: m.ids, n: m.n, v: Math.round(m.v) } : null);
+      });
+      cy.current.on("tap", (e) => { if (e.target === cy.current) { setSel(null); setEdge(null); } });
+      cy.current.on("mouseover", "node", (e) => {
+        const nb = e.target.closedNeighborhood();
+        cy.current?.elements().not(nb).addClass("dim");
+      });
+      cy.current.on("mouseout", "node", () => cy.current?.elements().removeClass("dim"));
+    } else {
+      cy.current.batch(() => {
+        cy.current?.elements().remove();
+        cy.current?.add(els);
+      });
+    }
+    stopLayout();
+    layoutRef.current = cy.current.layout({ name: "cose", animate: true, animationDuration: 600, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 24, fit: true });
+    layoutRef.current.run();
     if (hot && hot.size) cy.current.nodes().filter((n) => hot.has(n.id())).addClass("highlight");
-    cy.current.on("tap", "node", (e) => { setSel(e.target.id()); setEdge(null); });
-    cy.current.on("tap", "edge", (e) => {
-      const d = e.target.data();
-      const m = model.edges.find((x) => x.s === d.source && x.r === d.target) ?? null;
-      setEdge(m ? { s: m.s, r: m.r, ids: m.ids, n: m.n, v: Math.round(m.v) } : null);
-    });
-    cy.current.on("tap", (e) => { if (e.target === cy.current) { setSel(null); setEdge(null); } });
-    cy.current.on("mouseover", "node", (e) => {
-      const nb = e.target.closedNeighborhood();
-      cy.current?.elements().not(nb).addClass("dim");
-    });
-    cy.current.on("mouseout", "node", () => cy.current?.elements().removeClass("dim"));
-    return () => { cy.current?.destroy(); cy.current = null; };
+    return () => { stopLayout(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]);
 
@@ -124,7 +158,10 @@ export default function Network() {
     const opts = layoutName === "cose"
       ? { ...base, name: "cose" as const, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100 }
       : { ...base, name: layoutName as "concentric" | "circle" | "grid" };
-    cy.current.layout(opts).run();
+    stopLayout();
+    layoutRef.current = cy.current.layout(opts);
+    layoutRef.current.run();
+    return () => { stopLayout(); };
   }, [layoutName]);
 
   useEffect(() => {

@@ -99,16 +99,26 @@ export default function Network() {
     stopLayout();
     const inst = cy.current;
     cy.current = null;
-    if (inst) {
-      try { inst.stop(); } catch { /* noop */ }
-      try { inst.destroy(); } catch { /* noop */ }
-    }
+    if (!inst) return;
+    try { inst.stop(); } catch { /* already stopped */ }
+    // Cytoscape's cose loop always queues one more animation frame after
+    // stop(); that frame ends in done() → positions() → endBatch(), which
+    // needs a live renderer — but destroy() nulls it, so destroying
+    // synchronously makes the queued frame crash with
+    // "Cannot read properties of null (reading 'notify')". Let the pending
+    // frame drain against the live instance, then destroy on the next frame.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      try { inst.destroy(); } catch { /* already gone */ }
+    }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!cyRef.current || !model) return;
     modelRef.current = model;
+    // Stop the previous layout before touching elements: a frame of it may
+    // still fire once, and it must not race the element swap below.
+    stopLayout();
     const hot = highlight === "none" ? null : highlight === "cycles" ? cycleNodes : fanNodes;
     const els = [
       ...model.nodes.map((n) => ({ data: { id: n.id, deg: n.deg, lbl: n.lbl } })),

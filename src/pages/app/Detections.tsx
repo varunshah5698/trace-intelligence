@@ -1,7 +1,7 @@
 import { Card, Empty, PanelTitle, RiskCharacter, SevBadge, Sparkline, btnGhost, btnPrimary, emit, fmtAxis, num, shortId } from "@/components/app/Shell";
 import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV, type NormalizedTxn } from "@/lib/trace/csv";
-import { DEFAULT_RULES, runDetection, verifyAlerts, type Alert } from "@/lib/trace/detect";
+import { DEFAULT_RULES, runDetection, type Alert } from "@/lib/trace/detect";
 import { announceAnalysis, readModelMeta } from "@/lib/trace/ml";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
@@ -12,8 +12,8 @@ import { useReviewStore, type Review } from "@/lib/trace/reviews";
 import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  Ban, CheckCircle2, ChevronRight, Circle, Download, Eye, EyeOff, History,
-  ListChecks, Radar, RotateCcw, Scale, Search, ShieldCheck, TriangleAlert, X,
+  Ban, CheckCircle2, ChevronRight, Download, Eye, EyeOff, History,
+  Radar, Scale, Search, TriangleAlert, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -317,69 +317,53 @@ function Drawer({ a, dsName, rv, onClose }: { a: Alert; dsName: string; rv: stri
   );
 }
 
-/* ── Signal integrity ───────────────────────────────────────────────────── */
+/* ── Signal diagnostics radar ───────────────────────────────────────────── */
 
-/** Rules/model provenance for one alert. Reframes the "model scored this"
- *  check as not-applicable for rule-based signals (neutral, not a red cross)
- *  and shows an overall integrity meter over the applicable checks. */
-function IntegrityPanel({ a }: { a: Alert }) {
-  const model = readModelMeta();
-  const v = verifyAlerts([a], model)[0];
-  // Model check is only meaningful when the model exists and the signal is model-based.
-  const modelNa = !v.confirmedByModel && model !== null;
-  const applicable = v.checks.filter((_, i) => !(i === 0 && modelNa));
-  const passedN = applicable.filter((c) => c.passed).length;
-  const kind = v.confirmedByModel
-    ? { label: "model-scored signal", color: "var(--success)" }
-    : v.rulesOnly
-      ? { label: "deterministic rule match", color: "#60A5FA" }
-      : { label: "model signal — unconfirmed", color: "var(--warning)" };
+/** Four-axis diagnostic radar: real resolution/context ratios computed from the
+ *  alert and dataset — descriptive, never a probability of guilt. */
+function DiagnosticsRadar({ a, txns, entitiesResolved, model, hex }: {
+  a: Alert; txns: NormalizedTxn[]; entitiesResolved: number; model: boolean; hex: string;
+}) {
+  const axes = [
+    { label: "EVIDENCE", v: Math.min(1, a.evidence.length / 4), note: `${a.evidence.length} observations` },
+    { label: "TRANSFERS", v: a.txnIds.length ? txns.length / a.txnIds.length : 0, note: `${txns.length}/${a.txnIds.length} resolved` },
+    { label: "ENTITIES", v: a.entities.length ? entitiesResolved / a.entities.length : 0, note: `${entitiesResolved}/${a.entities.length} resolved` },
+    { label: "MODEL", v: model ? 1 : 0.3, note: model ? "model scored" : "rules-only" },
+  ];
+  const size = 300, cx = 150, cy = 140, R = 76;
+  const pt = (i: number, r: number) => {
+    const ang = -Math.PI / 2 + (i * 2 * Math.PI) / axes.length;
+    return [cx + Math.cos(ang) * r * R, cy + Math.sin(ang) * r * R] as const;
+  };
+  const fmtPt = (i: number, r: number) => pt(i, r).map((n) => n.toFixed(1)).join(",");
+  const shape = axes.map((d, i) => fmtPt(i, Math.max(0.08, d.v))).join(" ");
   return (
-    <div className="rounded-xl border border-border/70 bg-[color:var(--glass)] p-4 text-[13px] backdrop-blur-md">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-          <ShieldCheck className="h-3.5 w-3.5" /> Signal integrity
-        </p>
-        <span
-          className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
-          style={{ color: kind.color, borderColor: `color-mix(in srgb, ${kind.color} 35%, transparent)`, background: `color-mix(in srgb, ${kind.color} 10%, transparent)` }}
-        >
-          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
-          {kind.label}
-        </span>
-      </div>
-      <div className="mt-3 flex items-center gap-2">
-        <span className="flex flex-1 gap-1" aria-hidden>
-          {applicable.map((c, i) => (
-            <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: c.passed ? "var(--success)" : "color-mix(in srgb, var(--warning) 55%, transparent)" }} />
-          ))}
-        </span>
-        <span className="tnum text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">{passedN}</span>/{applicable.length} checks</span>
-      </div>
-      <ul className="mt-3 space-y-1.5">
-        {v.checks.map((c, i) => {
-          const na = i === 0 && modelNa;
+    <div>
+      <svg viewBox={`0 0 ${size} ${size}`} className="w-full" role="img" aria-label="Signal diagnostics — descriptive ratios">
+        <title>Signal diagnostics — descriptive ratios</title>
+        {[0.33, 0.66, 1].map((r) => (
+          <polygon key={r} points={axes.map((_, i) => fmtPt(i, r)).join(" ")} fill="none" stroke="var(--border)" strokeWidth="1" />
+        ))}
+        {axes.map((_, i) => {
+          const [x, y] = pt(i, 1);
+          return <line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke="var(--border)" strokeWidth="1" />;
+        })}
+        <polygon points={shape} fill={hex} fillOpacity="0.22" stroke={hex} strokeWidth="2" strokeLinejoin="round" />
+        {axes.map((d, i) => {
+          const [x, y] = pt(i, Math.max(0.08, d.v));
+          return <circle key={d.label} cx={x} cy={y} r="3.5" fill={hex} stroke="var(--elevated)" strokeWidth="1.5" />;
+        })}
+        {axes.map((d, i) => {
+          const [x, y] = pt(i, 1.26);
           return (
-            <li key={i} className="flex items-center gap-2">
-              {c.passed ? (
-                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[color:var(--success)]" />
-              ) : na ? (
-                <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
-              ) : (
-                <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-[color:var(--warning)]" />
-              )}
-              <span className={c.passed ? "" : na ? "text-muted-foreground" : "text-foreground/90"}>
-                {na ? "Model confirmation not applicable — deterministic rule signal" : c.label}
-              </span>
-            </li>
+            <g key={d.label}>
+              <text x={x} y={y} textAnchor="middle" fontSize="9.5" fill="var(--muted-foreground)" fontWeight="700" letterSpacing="0.08em">{d.label}</text>
+              <text x={x} y={y + 13} textAnchor="middle" fontSize="9.5" fill="var(--foreground)" opacity="0.8">{d.note}</text>
+            </g>
           );
         })}
-      </ul>
-      {v.rulesOnly && !v.confirmedByModel && (
-        <p className="mt-3 border-t border-border/60 pt-2.5 text-xs leading-5 text-muted-foreground">
-          This alert is a deterministic pattern match. The isolation forest may still rank the implicated transfers as unusual — the model never vetoes or endorses a rule signal.
-        </p>
-      )}
+      </svg>
+      <p className="mt-1 text-center text-[11px] text-muted-foreground">Descriptive ratios — never a probability of guilt.</p>
     </div>
   );
 }
@@ -474,61 +458,6 @@ function AmountContext({ txns, all, hex }: { txns: NormalizedTxn[]; all: Normali
   );
 }
 
-/* ── Analyst checklist ──────────────────────────────────────────────────── */
-
-/** Interactive checklist over the rule's suggested next checks — ticks persist per alert on this device. */
-function ChecklistCard({ a }: { a: Alert }) {
-  const key = `trace.v1.checklist.${a.id}`;
-  const [done, setDone] = useState<Record<string, boolean>>(() => {
-    try { return JSON.parse(localStorage.getItem(key) ?? "{}"); } catch { return {}; }
-  });
-  const doneN = a.checks.filter((_, i) => done[i]).length;
-  function toggle(i: number) {
-    setDone((prev) => {
-      const next = { ...prev, [i]: !prev[i] };
-      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* quota — session only */ }
-      return next;
-    });
-  }
-  function reset() {
-    setDone({});
-    try { localStorage.removeItem(key); } catch { /* ignore */ }
-  }
-  return (
-    <div className="rounded-xl border border-border/70 bg-[color:var(--glass)] p-4 text-[13px] backdrop-blur-md">
-      <div className="flex items-center justify-between gap-2">
-        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"><ListChecks className="h-3.5 w-3.5" /> Analyst checklist</p>
-        <span className="tnum text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">{doneN}</span>/{a.checks.length} done</span>
-      </div>
-      <ul className="mt-2.5 space-y-0.5">
-        {a.checks.map((c, i) => {
-          const ok = !!done[i];
-          return (
-            <li key={i}>
-              <button onClick={() => toggle(i)} aria-pressed={ok} className="flex w-full items-start gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-[color:var(--glass-hi)]">
-                <span
-                  className={`mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-md border transition-all ${ok ? "border-transparent" : "border-border"}`}
-                  style={ok ? { background: "var(--success)" } : undefined}
-                  aria-hidden
-                >
-                  {ok && <CheckCircle2 className="h-3 w-3" style={{ color: "var(--background)" }} />}
-                </span>
-                <span className={`leading-5 transition-all ${ok ? "text-muted-foreground line-through" : "text-foreground/90"}`}>{c}</span>
-              </button>
-            </li>
-          );
-        })}
-      </ul>
-      {doneN > 0 && (
-        <button onClick={reset} className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
-          <RotateCcw className="h-3 w-3" /> Reset ticks
-        </button>
-      )}
-      <p className="mt-2 border-t border-border/60 pt-2 text-[11px] leading-5 text-muted-foreground">Ticks save on this device per alert — the next reviewer sees where you stopped.</p>
-    </div>
-  );
-}
-
 /* ── Full workbench ─────────────────────────────────────────────────────── */
 
 function Workbench({ id }: { id: string }) {
@@ -591,6 +520,17 @@ function Workbench({ id }: { id: string }) {
     .sort((x, y) => y.alertHits - x.alertHits || (y.sent + y.recv) - (x.sent + x.recv))
     .slice(0, 6);
 
+  // Diagnostics inputs: how much of the signal resolves against the dataset.
+  const datasetEntities = new Set<string>();
+  for (const t of d.txns) { datasetEntities.add(t.sender); datasetEntities.add(t.receiver); }
+  const entitiesResolved = a.entities.filter((e) => datasetEntities.has(e)).length;
+  const confirmed = a.ruleId === "ml" && !!readModelMeta();
+  const provenance = confirmed
+    ? { label: "model-scored signal", color: "var(--success)" }
+    : a.ruleId !== "ml"
+      ? { label: "deterministic rule match", color: "#60A5FA" }
+      : { label: "model signal — unconfirmed", color: "var(--warning)" };
+
   async function act(kind: Review) {
     if (busy) return;
     setBusy(true);
@@ -632,9 +572,14 @@ function Workbench({ id }: { id: string }) {
 
   return (
     <div className="space-y-4">
-      <Link to="/detections" className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground">
-        ← Alert explorer
-      </Link>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Link to="/detections" className="inline-flex items-center gap-1 text-[13px] text-muted-foreground transition-colors hover:text-foreground">
+          ← Alert explorer
+        </Link>
+        <Link to="/audit" className="inline-flex items-center gap-1.5 text-[13px] text-muted-foreground transition-colors hover:text-foreground">
+          <History className="h-3.5 w-3.5" /> Audit trail
+        </Link>
+      </div>
 
       {/* ── Hero: severity aurora + score ring + context chips ── */}
       <Card className="relative overflow-hidden">
@@ -659,13 +604,13 @@ function Workbench({ id }: { id: string }) {
           <motion.div className="min-w-0 flex-1" {...fade(0.08)}>
             <div className="flex flex-wrap items-center gap-2">
               <SevBadge sev={a.severity} />
-              <StatusPill status={rv} />
               <span className="text-[11px] text-muted-foreground">{a.category} · rule <span className="mono">{a.ruleId} v1</span> · priority is a review rank, not a probability</span>
             </div>
             <h2 className="display mt-2 text-xl font-bold leading-tight tracking-tight">{a.title}</h2>
             <div className="mt-3 flex flex-wrap items-center gap-1.5 text-[11px]">
               {[
                 <span key="ds" className="rounded-full border border-border bg-[color:var(--glass)] px-2.5 py-1 text-muted-foreground">{d.name}</span>,
+                <span key="add" className="rounded-full border border-border bg-[color:var(--glass)] px-2.5 py-1 text-muted-foreground">added {new Date(d.createdAt).toLocaleDateString()}</span>,
                 <span key="tx" className="rounded-full border border-border bg-[color:var(--glass)] px-2.5 py-1 text-muted-foreground"><span className="tnum font-semibold text-foreground">{txns.length}</span> transfers</span>,
                 <span key="en" className="rounded-full border border-border bg-[color:var(--glass)] px-2.5 py-1 text-muted-foreground"><span className="tnum font-semibold text-foreground">{a.entities.length}</span> entities</span>,
                 <span key="ev" className="rounded-full border border-border bg-[color:var(--glass)] px-2.5 py-1 text-muted-foreground"><span className="tnum font-semibold text-foreground">{a.evidence.length}</span> observations</span>,
@@ -673,8 +618,43 @@ function Workbench({ id }: { id: string }) {
               ]}
             </div>
           </motion.div>
-          <motion.div className="hidden shrink-0 items-center gap-3 lg:flex" {...fade(0.16)}>
-            <Radar className="h-9 w-9" style={{ color: hex }} strokeWidth={1.4} />
+          {/* decisions live in the hero — the old review-desk card is gone */}
+          <motion.div className="flex shrink-0 flex-col items-start gap-2 lg:ml-auto lg:items-end" {...fade(0.16)}>
+            <StatusPill status={rv} />
+            <div className="grid grid-cols-2 gap-1.5">
+              {([
+                ["reviewed", "Mark Reviewed", CheckCircle2],
+                ["escalated", "Escalate", TriangleAlert],
+                ["false-positive", "Dismiss", Ban],
+                ["reviewing", "Keep Reviewing", Eye],
+              ] as [Review, string, LucideIcon][]).map(([kind, label, Icon]) => {
+                const on = rv === kind;
+                const c = REV_COLOR[kind] ?? "var(--primary)";
+                const standing = kind === "escalated" ? btnPrimary : btnGhost;
+                return (
+                  <button
+                    key={kind}
+                    onClick={() => act(kind)}
+                    disabled={busy}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-medium transition-all disabled:opacity-50 ${on ? "" : standing}`}
+                    style={on ? {
+                      color: c,
+                      borderColor: `color-mix(in srgb, ${c} 45%, transparent)`,
+                      background: `color-mix(in srgb, ${c} 12%, transparent)`,
+                      boxShadow: `0 0 20px -8px ${c}`,
+                    } : undefined}
+                    title={on ? `Already marked “${kind.replace("-", " ")}”` : `Mark as ${kind.replace("-", " ")}`}
+                  >
+                    <Icon className="h-3 w-3" /> {busy ? "Saving…" : label}
+                  </button>
+                );
+              })}
+            </div>
+            {!store.shared && (
+              <p className="flex items-center gap-1.5 rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 px-2.5 py-1.5 text-[10.5px] leading-tight text-foreground/90">
+                <TriangleAlert className="h-3 w-3 shrink-0 text-[color:var(--warning)]" /> Offline — actions save here and sync later.
+              </p>
+            )}
           </motion.div>
         </div>
       </Card>
@@ -742,6 +722,23 @@ function Workbench({ id }: { id: string }) {
             </div>
           </Card>
 
+          {/* reading the signal — benign explanations beside hard limits */}
+          <Card className="p-5">
+            <PanelTitle title="Reading the signal" sub="What may be entirely benign — beside what this signal cannot tell you" />
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/8 p-4 text-[13px] backdrop-blur-md">
+                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--teal)]"><Scale className="h-3.5 w-3.5" /> May be legitimate</p>
+                <p className="mt-2 leading-6 text-foreground/90">{a.legitimate}</p>
+                <p className="mt-2 border-t border-[color:var(--teal)]/25 pt-2 text-[11px] leading-5 text-muted-foreground">A rule cannot separate these from the flagged pattern — only context can.</p>
+              </div>
+              <div className="rounded-xl border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 p-4 text-[13px] backdrop-blur-md">
+                <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--warning)]"><EyeOff className="h-3.5 w-3.5" /> Cannot tell you</p>
+                <p className="mt-2 leading-6 text-foreground/90">{a.limitations}</p>
+                <p className="mt-2 border-t border-[color:var(--warning)]/25 pt-2 text-[11px] leading-5 text-muted-foreground">Know what this signal cannot tell you before escalating.</p>
+              </div>
+            </div>
+          </Card>
+
           {/* evidence grid */}
           <Card className="p-5">
             <PanelTitle title="Measured evidence" sub={`${a.evidence.length} observations recorded by the rule`} />
@@ -757,7 +754,19 @@ function Workbench({ id }: { id: string }) {
 
           {/* supporting transfers */}
           <Card className="p-5">
-            <PanelTitle title="Supporting transfers" sub={`${txns.length} records tie this signal to the ledger`} />
+            <PanelTitle
+              title="Supporting transfers"
+              sub={`${txns.length} records tie this signal to the ledger`}
+              right={
+                <button
+                  onClick={() => download(`${a.id}-evidence.csv`, toCSV(txns.map((t) => ({ id: t.id, sender: t.sender, receiver: t.receiver, amount: t.amount, currency: t.currency, ts: t.timestamp }))))}
+                  className={btnGhost}
+                  title="Download these records as CSV"
+                >
+                  <Download className="h-3.5 w-3.5" /> Export evidence
+                </button>
+              }
+            />
             <div className="mt-3 overflow-x-auto">
               <table className="w-full min-w-[560px] text-left text-xs">
                 <thead>
@@ -782,76 +791,26 @@ function Workbench({ id }: { id: string }) {
             </div>
           </Card>
 
-          <IntegrityPanel a={a} />
-
-          {/* alternative readings + analyst checklist + blind spots */}
-          <div className="grid items-start gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/8 p-4 text-[13px] backdrop-blur-md">
-              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--teal)]"><Scale className="h-3.5 w-3.5" /> Alternative readings</p>
-              <p className="mt-2 leading-6 text-foreground/90">{a.legitimate}</p>
-              <p className="mt-2 border-t border-[color:var(--teal)]/25 pt-2 text-[11px] leading-5 text-muted-foreground">A rule cannot separate these from the flagged pattern — only context can.</p>
-            </div>
-            <ChecklistCard key={a.id} a={a} />
-            <div className="rounded-xl border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 p-4 text-[13px] backdrop-blur-md">
-              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--warning)]"><EyeOff className="h-3.5 w-3.5" /> Blind spots</p>
-              <p className="mt-2 leading-6 text-foreground/90">{a.limitations}</p>
-              <p className="mt-2 border-t border-[color:var(--warning)]/25 pt-2 text-[11px] leading-5 text-muted-foreground">Know what this signal cannot tell you before escalating.</p>
-            </div>
-          </div>
         </div>
 
-        {/* ── Review desk ── */}
+        {/* ── Diagnostics (replaces the old review desk) ── */}
         <div className="space-y-4">
-          <Card className="p-4 text-[13px]">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Review desk</p>
-              <StatusPill status={rv} />
+          <Card className="p-5">
+            <PanelTitle
+              title="Signal diagnostics"
+              sub="Where this signal is strong — and where it is thin"
+              right={<Radar className="h-4 w-4" style={{ color: hex }} aria-hidden />}
+            />
+            <div className="mt-3 flex justify-center">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-semibold"
+                style={{ color: provenance.color, borderColor: `color-mix(in srgb, ${provenance.color} 35%, transparent)`, background: `color-mix(in srgb, ${provenance.color} 10%, transparent)` }}
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden /> {provenance.label}
+              </span>
             </div>
-            <dl className="mt-3 space-y-2">
-              {([["Dataset", d.name], ["Dataset added", new Date(d.createdAt).toLocaleDateString()], ["Rule version", `${a.ruleId} v1`], ["Entities", String(a.entities.length)], ["Transactions", String(a.txnIds.length)]] as [string, string][]).map(([k, x]) => (
-                <div key={k} className="flex justify-between gap-2 border-b border-border/50 pb-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="truncate font-medium" title={x}>{x}</dd></div>
-              ))}
-            </dl>
-            {!store.shared && (
-              <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 px-2.5 py-2 text-[11px] leading-4">
-                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--warning)]" />
-                <p className="flex-1 text-foreground/90">Backend unreachable — actions are saved on this device and sync automatically when the connection returns.</p>
-                <button onClick={() => window.location.reload()} className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground">Retry</button>
-              </div>
-            )}
-            {/* semantic action grid — the current status lights up its own action */}
-            <div className="mt-3 grid grid-cols-2 gap-1.5">
-              {([
-                ["reviewed", "Mark Reviewed", CheckCircle2],
-                ["escalated", "Escalate", TriangleAlert],
-                ["false-positive", "Dismiss False Positive", Ban],
-                ["reviewing", "Keep Reviewing", Eye],
-              ] as [Review, string, LucideIcon][]).map(([kind, label, Icon]) => {
-                const on = rv === kind;
-                const c = REV_COLOR[kind] ?? "var(--primary)";
-                const standing = kind === "escalated" ? btnPrimary : btnGhost;
-                return (
-                  <button
-                    key={kind}
-                    onClick={() => act(kind)}
-                    disabled={busy}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-[12.5px] font-medium transition-all disabled:opacity-50 ${on ? "" : standing}`}
-                    style={on ? {
-                      color: c,
-                      borderColor: `color-mix(in srgb, ${c} 45%, transparent)`,
-                      background: `color-mix(in srgb, ${c} 12%, transparent)`,
-                      boxShadow: `0 0 20px -8px ${c}`,
-                    } : undefined}
-                    title={on ? `This alert is already marked “${kind.replace("-", " ")}”` : `Mark as ${kind.replace("-", " ")}`}
-                  >
-                    <Icon className="h-3.5 w-3.5" /> {busy ? "Saving…" : label}
-                  </button>
-                );
-              })}
-            </div>
-            <div className="mt-2 flex gap-1.5">
-              <button onClick={() => download(`${a.id}-evidence.csv`, toCSV(txns.map((t) => ({ id: t.id, sender: t.sender, receiver: t.receiver, amount: t.amount, currency: t.currency, ts: t.timestamp }))))} className={btnGhost + " flex-1"}><Download className="h-3.5 w-3.5" /> Export Case</button>
-              <Link to="/audit" className={btnGhost + " flex-1 justify-center"}><History className="h-3.5 w-3.5" /> Audit Trail</Link>
+            <div className="mt-2">
+              <DiagnosticsRadar a={a} txns={txns} entitiesResolved={entitiesResolved} model={confirmed} hex={hex} />
             </div>
           </Card>
           <Card className="p-4">

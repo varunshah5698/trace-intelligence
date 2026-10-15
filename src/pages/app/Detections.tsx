@@ -7,12 +7,8 @@ import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
-
-type Review = "new" | "reviewing" | "reviewed" | "false-positive" | "escalated";
-const RKEY = "trace.v1.reviews";
-const NKEY = "trace.v1.alertnotes";
-function reviews(): Record<string, Review> { try { return JSON.parse(localStorage.getItem(RKEY) ?? "{}"); } catch { return {}; } }
-function notes(): Record<string, { at: string; text: string }[]> { try { return JSON.parse(localStorage.getItem(NKEY) ?? "{}"); } catch { return {}; } }
+import { useAuth } from "@/hooks/use-auth";
+import { useReviewStore, type Review } from "@/lib/trace/reviews";
 
 export default function Detections() {
   const { id } = useParams();
@@ -29,7 +25,8 @@ function Explorer() {
   const [method, setMethod] = useState("");
   const [drawer, setDrawer] = useState<Alert | null>(null);
   const [v, setV] = useState(0);
-  const rv = useMemo(() => reviews(), [v]);
+  const store = useReviewStore();
+  const rv = useMemo(() => store.statusMap(), [store, v]);
   const q = (sp.get("q") ?? "").toLowerCase();
 
   const ds = useMemo(() => { const a = loadAll(); return a.find((d) => d.id === getSelected()) ?? a[0]; }, [v]);
@@ -125,11 +122,6 @@ function Explorer() {
   );
 }
 
-function setReview(id: string, s: Review) {
-  const r = reviews(); r[id] = s;
-  localStorage.setItem(RKEY, JSON.stringify(r));
-}
-
 function Drawer({ a, dsName, onClose }: { a: Alert; dsName: string; onClose: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -178,6 +170,9 @@ function Workbench({ id }: { id: string }) {
   const saveCase = useMutation(api.trace.saveInvestigation);
   const [v, setV] = useState(0);
   const [note, setNote] = useState("");
+  const { user } = useAuth();
+  const store = useReviewStore();
+  const actor = String(user?.email ?? "analyst");
   const found = useMemo(() => {
     for (const d of loadAll()) {
       const a = d.alerts.find((x) => x.id === id);
@@ -188,22 +183,21 @@ function Workbench({ id }: { id: string }) {
   void v;
   if (!found) return <Card><Empty title="Alert not found" body="It may belong to a deleted dataset." action={<Link to="/detections" className={btnGhost}>Back to explorer</Link>} /></Card>;
   const { a, d } = found;
-  const rv = reviews()[id] ?? "new";
-  const ns = notes()[id] ?? [];
+  const rv = store.statusOf(id);
+  const ns = store.notesOf(id);
   const txns = a.txnIds.map((t) => d.txns.find((x) => x.id === t)).filter(Boolean);
 
-  async function act(kind: Review, label: string) {
-    setReview(id, kind);
+  async function act(kind: Review) {
+    await store.setStatus(id, kind, actor);
     if (kind === "escalated") {
       await saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] });
     }
     setV((x) => x + 1);
-    void label;
   }
-  function addNote() {
+  async function addNote() {
     if (!note.trim()) return;
-    const n = notes(); n[id] = [...(n[id] ?? []), { at: new Date().toISOString(), text: note.trim() }];
-    localStorage.setItem(NKEY, JSON.stringify(n)); setNote(""); setV((x) => x + 1);
+    await store.addNote(id, note.trim(), actor);
+    setNote(""); setV((x) => x + 1);
   }
 
   return (
@@ -257,11 +251,12 @@ function Workbench({ id }: { id: string }) {
                 <div key={k} className="flex justify-between gap-2 border-b border-border/50 pb-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="truncate font-medium">{x}</dd></div>
               ))}
             </dl>
+            {!store.shared && <p className="mt-2 text-xs text-[color:var(--warning)]">Backend unreachable — changes stay on this device until sync.</p>}
             <div className="mt-3 grid grid-cols-2 gap-1.5">
-              <button onClick={() => act("reviewed", "reviewed")} className={btnGhost}>Mark Reviewed</button>
-              <button onClick={() => act("escalated", "escalated")} className={btnPrimary}>Escalate</button>
-              <button onClick={() => act("false-positive", "dismissed")} className={btnGhost}>Dismiss as False Positive</button>
-              <button onClick={() => act("reviewing", "reviewing")} className={btnGhost}>Keep Reviewing</button>
+              <button onClick={() => act("reviewed")} className={btnGhost}>Mark Reviewed</button>
+              <button onClick={() => act("escalated")} className={btnPrimary}>Escalate</button>
+              <button onClick={() => act("false-positive")} className={btnGhost}>Dismiss as False Positive</button>
+              <button onClick={() => act("reviewing")} className={btnGhost}>Keep Reviewing</button>
             </div>
             <div className="mt-2 flex gap-1.5">
               <button onClick={() => download(`${a.id}-evidence.csv`, toCSV(txns.map((t) => ({ id: t!.id, sender: t!.sender, receiver: t!.receiver, amount: t!.amount, currency: t!.currency, ts: t!.timestamp }))))} className={btnGhost}>Export Case</button>
@@ -271,7 +266,7 @@ function Workbench({ id }: { id: string }) {
           <Card className="p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reviewer notes ({ns.length})</p>
             <div className="mt-2 space-y-2">
-              {ns.map((n, i) => <div key={i} className="rounded border border-border p-2.5 text-[13px]"><p>{n.text}</p><p className="mono mt-1 text-[11px] text-muted-foreground">{new Date(n.at).toLocaleString()}</p></div>)}
+              {ns.map((n, i) => <div key={i} className="rounded border border-border p-2.5 text-[13px]"><p>{n.text}</p><p className="mono mt-1 text-[11px] text-muted-foreground">{n.actor ? `${n.actor} · ` : ""}{new Date(n.at).toLocaleString()}</p></div>)}
               {ns.length === 0 && <p className="text-[13px] text-muted-foreground">No notes yet.</p>}
             </div>
             <div className="mt-2 flex gap-1.5">

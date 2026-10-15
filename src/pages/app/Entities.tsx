@@ -2,6 +2,8 @@ import { Card, Empty, PanelTitle, inputCls, num, shortId } from "@/components/ap
 import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
+import { useAuth } from "@/hooks/use-auth";
+import { useReviewStore } from "@/lib/trace/reviews";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function Entities() {
@@ -59,7 +61,9 @@ function List() {
 function Profile({ id }: { id: string }) {
   const ds = loadAll().find((d) => d.id === getSelected()) ?? loadAll()[0];
   const [note, setNote] = useState("");
-  const [notes, setNotes] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem(`trace.entity.${id}`) ?? "[]"); } catch { return []; } });
+  const { user } = useAuth();
+  const store = useReviewStore();
+  const notes = store.notesOf(`entity:${id}`);
   if (!ds) return <Card><Empty title="No dataset" body="Upload data first." /></Card>;
   const tx = useMemo(() => ds.txns.filter((t) => t.sender === id || t.receiver === id).sort((a, b) => a.epoch - b.epoch), [ds, id]);
   if (!tx.length) return <Card><Empty title="Entity not found" body={`No transfers reference ${id} in the active dataset.`} action={<Link to="/entities" className="text-[13px] text-[color:var(--primary)] hover:underline">Back to entities</Link>} /></Card>;
@@ -75,10 +79,10 @@ function Profile({ id }: { id: string }) {
   const trend = [...buckets.entries()].sort().slice(-20).map(([d, n]) => ({ d: d.slice(5), n }));
   const currencies = [...new Set(tx.map((t) => t.currency))];
 
-  function saveNote() {
+  async function saveNote() {
     if (!note.trim()) return;
-    const n = [...notes, note.trim()];
-    setNotes(n); localStorage.setItem(`trace.entity.${id}`, JSON.stringify(n)); setNote("");
+    await store.addNote(`entity:${id}`, note.trim(), String(user?.email ?? "analyst"));
+    setNote("");
   }
 
   return (
@@ -129,7 +133,7 @@ function Profile({ id }: { id: string }) {
           </Card>
           <Card className="p-4">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Review notes ({notes.length})</p>
-            {notes.map((n, i) => <p key={i} className="mt-1.5 rounded border border-border p-2 text-[13px]">{n}</p>)}
+            {notes.map((n, i) => <p key={i} className="mt-1.5 rounded border border-border p-2 text-[13px]">{n.text}{n.actor ? <span className="mono mt-0.5 block text-[11px] text-muted-foreground">{n.actor}</span> : null}</p>)}
             <div className="mt-2 flex gap-1.5">
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note…" className={`${inputCls}`} />
               <button onClick={saveNote} className="rounded-md bg-[color:var(--primary)] px-3 py-1.5 text-[13px] font-semibold text-white">Add</button>

@@ -104,7 +104,7 @@ export default function Studio() {
               <p className="mono mt-3 text-[11px] text-muted-foreground">schema: transaction_id, sender, receiver, amount, currency, timestamp, channel, origin_country, destination_country, purpose</p>
             </div>
           ) : (
-            <Empty title="No scenario yet" body="Configure the ledger on the left, or describe it in plain language, then generate." />
+            <Empty title="No scenario yet" body="Configure the ledger on the left, describe it in plain language, or start from an example." action={<button onClick={() => setPreview(generate(spec))} className={btnPrimary}>Generate example scenario</button>} />
           )}
         </Card>
       </div>

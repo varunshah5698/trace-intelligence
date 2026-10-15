@@ -1,4 +1,6 @@
 import { Card, Empty, Kpi, PanelTitle, SevBadge, emit, fmtBig, num } from "@/components/app/Shell";
+import { api } from "@/convex/_generated/api";
+import { useQuery } from "convex/react";
 import { getSelected, loadAll, setSelected } from "@/lib/trace/store";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -24,6 +26,8 @@ export default function Overview() {
 
   const all = useMemo(() => loadAll(), [tick]);
   const ds = all.find((d) => d.id === getSelected()) ?? all[0];
+  const inv = useQuery(api.trace.listInvestigations);
+  const openInv = inv ? inv.filter((c) => c.status !== "closed").length : 0;
 
   const txns = useMemo(() => {
     if (!ds) return [];
@@ -160,7 +164,7 @@ export default function Overview() {
         <Kpi label="Detection Alerts" value={num(alerts.length)} sub={`${byCat.length} categories`} spark={alertSpark} accent="var(--warning)" />
         <Kpi label="High-Priority Reviews" value={num(hi.length)} sub="high + critical" spark={hiSpark} accent="var(--destructive)" />
         <Kpi label="Connected Entities" value={num(accts.size)} sub="senders + receivers" />
-        <Kpi label="Open Investigations" value={num(0)} sub="cases persist in workspace" />
+        <Kpi label="Open Investigations" value={inv ? num(openInv) : "…"} sub="open · reviewing · escalated" />
         <Kpi label="Value (top currency)" value={byCur[0] ? fmtBig(byCur[0].v, byCur[0].c) : "—"} sub={byCur[0] ? `${num(byCur[0].n)} transfers · ${byCur[0].c} only` : "no data"} spark={valSpark} accent="var(--teal)" />
       </div>
 

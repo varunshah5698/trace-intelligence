@@ -1,7 +1,8 @@
 import { Card, Empty, PanelTitle, btnGhost, btnPrimary, inputCls } from "@/components/app/Shell";
 import { api } from "@/convex/_generated/api";
+import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMutation, useQuery } from "convex/react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useParams } from "react-router";
 
 export default function Cases() {
@@ -46,7 +47,7 @@ function CaseList() {
               <span className="tnum text-xs text-muted-foreground">{c.alertIds.length} alerts · updated {new Date(c.updatedAt).toLocaleDateString()}</span>
             </Link>
           ))}
-          {rows.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">No cases match. Escalate an alert or create one manually.</p>}
+          {rows.length === 0 && ((q || status) ? <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">No cases match these filters.</p> : <FirstCase />)}
         </div>
       </Card>
       <Card className="h-fit p-4">
@@ -58,6 +59,33 @@ function CaseList() {
         </ul>
         <Link to="/audit" className="mt-3 inline-block text-[13px] text-[color:var(--primary)] hover:underline">Open audit trail →</Link>
       </Card>
+    </div>
+  );
+}
+
+function FirstCase() {
+  const create = useMutation(api.trace.saveInvestigation);
+  const [done, setDone] = useState(false);
+  const top = useMemo(() => {
+    const a = loadAll();
+    const ds = a.find((d) => d.id === getSelected()) ?? a[0];
+    if (!ds) return null;
+    const hi = ds.alerts.filter((x) => x.severity === "high" || x.severity === "critical");
+    return { ds, alert: hi[0] ?? ds.alerts[0] ?? null };
+  }, []);
+  const al = top?.alert ?? null;
+  if (done) return null;
+  return (
+    <div className="px-4 py-8 text-center">
+      <p className="text-[13px] font-semibold">No cases yet — start from a live example</p>
+      {al && top ? (
+        <>
+          <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">Top review signal in “{top.ds.name}”: <span className="font-medium text-foreground">{al.title}</span> ({al.severity}, {al.txnIds.length} transfers)</p>
+          <button onClick={async () => { if (!al || !top) return; await create({ title: `Case — ${al.title}`, status: "open", priority: al.severity, datasetId: top.ds.id, alertIds: [al.id], notes: [] }); setDone(true); }} className={`${btnPrimary} mt-3`}>Escalate &amp; create case</button>
+        </>
+      ) : (
+        <p className="mx-auto mt-1 max-w-md text-[13px] text-muted-foreground">Upload or generate a dataset first — alerts you escalate become cases here.</p>
+      )}
     </div>
   );
 }
@@ -134,7 +162,12 @@ function Audit() {
               ))}
             </tbody>
           </table>
-          {rows.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">No audit events match.</p>}
+          {rows.length === 0 && (audit.length === 0 ? (
+            <div className="px-4 py-8 text-center">
+              <p className="text-[13px] font-semibold">No audit events yet</p>
+              <p className="mx-auto mt-1 max-w-lg text-[13px] text-muted-foreground">Example of what lands here: <span className="mono text-xs">analyst · case.escalated · ALT-… · recorded · just now</span>. Escalate an alert, add a note, or change a case status to write the first event.</p>
+            </div>
+          ) : <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">No audit events match these filters.</p>)}
         </div>
       </Card>
       {cur && (

@@ -35,6 +35,15 @@ export default function FundFlows() {
     return out.sort((a, b) => b.v - a.v);
   }, [ds, q, scope]);
 
+  const example = useMemo(() => {
+    if (!ds || seqs.length > 0) return null;
+    for (const t of ds.txns.slice(0, 500)) {
+      const nxt = ds.txns.find((o) => o.sender === t.receiver && o.epoch >= t.epoch);
+      if (nxt) return { path: [t.sender, t.receiver, nxt.receiver], ids: [t.id, nxt.id] };
+    }
+    return null;
+  }, [ds, seqs.length]);
+
   if (!ds) return <Card><Empty title="No dataset available" body="Upload a transaction CSV or generate a synthetic dataset to begin analysis." /></Card>;
 
   return (
@@ -64,7 +73,23 @@ export default function FundFlows() {
           </Card>
         ))}
       </div>
-      {seqs.length === 0 && <Card><Empty title="No sequences found" body="No two-hop pass-through paths match these filters. Widen the scope or lower the account filter." /></Card>}
+      {seqs.length === 0 && (
+        <Card className="p-5">
+          <PanelTitle title="No sequences under these filters" sub="Example two-hop path from your data — clear filters to explore them all" />
+          {example && (
+            <div className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold">
+              {example.path.map((p, j) => (
+                <span key={j} className="flex items-center gap-1.5">
+                  {j > 0 && <span className="text-[color:var(--teal)]">→</span>}
+                  <Link to={`/entities/${encodeURIComponent(p)}`} className="mono text-xs hover:underline">{p}</Link>
+                </span>
+              ))}
+            </div>
+          )}
+          {example && <p className="mono mt-1.5 text-[11px] text-[color:var(--primary)]">{example.ids.join(" → ")}</p>}
+          <button onClick={() => { setQ(""); setScope(""); }} className="mt-3 rounded-md bg-[color:var(--primary)] px-3.5 py-2 text-[13px] font-semibold text-white">Clear filters &amp; show sequences</button>
+        </Card>
+      )}
     </div>
   );
 }

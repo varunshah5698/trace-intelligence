@@ -98,13 +98,18 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
   }, [loc.pathname]);
   useEffect(() => setMobileOpen(false), [loc.pathname]);
   useEffect(() => {
+    // Self-healing workspace: if the library is ever empty (e.g. everything
+    // deleted), reseed the sample so no screen is left without data.
     const seeded = seedDemoWorkspace();
-    if (seeded) {
+    if (seeded || loadAll().length !== datasets.length) {
       setDatasets(loadAll());
       setSel(getSelected());
+    }
+    if (seeded) {
       toast.info("Demo workspace ready", { description: "Seeded a labelled synthetic dataset so every chart has real data. Upload your own CSV anytime." });
     }
-  }, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loc.pathname]);
 
   const active = useMemo(() => loadAll().find((d) => d.id === (getSelected() ?? loadAll()[0]?.id)), [datasets, sel, loc.pathname]);
   const unread = active?.alerts.filter((a) => a.severity === "high" || a.severity === "critical").length ?? 0;

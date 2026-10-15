@@ -131,8 +131,8 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/demo" element={<App title="Demo" sub="Synthetic-data demonstration, explicitly labelled."><Studio /></App>} />
                   <Route path="/monitoring" element={<App title="Transaction Monitoring" sub="Run jobs, review results."><Transactions /></App>} />
                   <Route path="/rules" element={<Navigate to="/models" replace />} />
-                  <Route path="/models" element={<App title="Models & Evaluation" sub="Measured metrics on labelled test sets — never invented."><GovWrap view="models" /></App>} />
-                  <Route path="/evaluation" element={<App title="Models & Evaluation" sub="Measured metrics on labelled test sets — never invented."><GovWrap view="evaluation" /></App>} />
+                  <Route path="/models" element={<Navigate to="/reports" replace />} />
+                  <Route path="/evaluation" element={<Navigate to="/reports" replace />} />
                   <Route path="/reports" element={<App title="Reports" sub="Generated downloads from actual backend data."><GovWrap view="reports" /></App>} />
                   <Route path="/audit" element={<App title="Audit Trail" sub="Actor, action, record, outcome."><Cases /></App>} />
                   <Route path="/investigations" element={<App title="Investigation Cases" sub="Cases, notes, status, audit."><Cases /></App>} />

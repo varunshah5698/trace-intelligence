@@ -40,7 +40,6 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
       { to: "/datasets", label: "Dataset Library", icon: Database },
       { to: "/datasets/new", label: "Upload CSV", icon: FileUp },
       { to: "/studio", label: "AI Data Studio", icon: FlaskConical },
-      { to: "/models", label: "Models & Evaluation", icon: FlaskConical },
       { to: "/reports", label: "Reports", icon: BookOpenCheck },
     ],
   },

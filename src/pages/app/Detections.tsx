@@ -199,7 +199,11 @@ function Workbench({ id }: { id: string }) {
     const ok = await store.setStatus(id, kind, actor);
     if (kind === "escalated") {
       try {
-        await saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] });
+        await Promise.race([
+          saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] }),
+          new Promise((_, rej) => setTimeout(() => rej(new Error("case-timeout")), 12000)),
+        ]);
+        toast.success("Case created", { description: "Linked evidence is waiting in Investigation Cases." });
       } catch {
         toast.error("Case creation failed", { description: "Status was still recorded. Retry the escalation from this workbench." });
       }

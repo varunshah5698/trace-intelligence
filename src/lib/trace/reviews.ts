@@ -30,6 +30,10 @@ function writeLocalNotes(n: Record<string, ReviewNote[]>) {
   try { localStorage.setItem(NKEY, JSON.stringify(n)); } catch { /* quota — backend still persists */ }
 }
 
+function withTimeout<T>(p: Promise<T>, ms = 9000): Promise<T | null> {
+  return Promise.race([p, new Promise<null>((res) => setTimeout(() => res(null), ms))]);
+}
+
 export function useReviewStore() {
   const remote = useQuery(api.trace.listAlertReviews);
   const save = useMutation(api.trace.saveAlertReview);
@@ -58,7 +62,7 @@ export function useReviewStore() {
       const r = localReviews();
       r[key] = status;
       writeLocalReviews(r);
-      try { await save({ key, status, actor }); return true; } catch { return false; }
+      try { return (await withTimeout(save({ key, status, actor }))) !== null; } catch { return false; }
     };
     const addNote = async (key: string, text: string, actor: string): Promise<boolean> => {
       const note = { at: new Date().toISOString(), text, actor };
@@ -66,7 +70,7 @@ export function useReviewStore() {
       const n = localNotes();
       n[key] = [...(n[key] ?? []), note];
       writeLocalNotes(n);
-      try { await save({ key, note, actor }); return true; } catch { return false; }
+      try { return (await withTimeout(save({ key, note, actor }))) !== null; } catch { return false; }
     };
     return { statusOf, statusMap, notesOf, setStatus, addNote, shared: remote !== undefined };
   }, [remote, save]);

@@ -1,8 +1,9 @@
-import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, WarnStrip, btnPrimary, fmtAxis, num, shortId } from "@/components/app/Shell";
+import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, WarnStrip, btnGhost, btnPrimary, fmtAxis, num, shortId } from "@/components/app/Shell";
+import type { Alert } from "@/lib/trace/detect";
 import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { ArrowRight } from "lucide-react";
+import { ArrowRight, X } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const TABS = ["splitting", "velocity", "pass-through", "network", "behaviour", "structuring", "cross-border"];
@@ -12,6 +13,7 @@ export default function Domestic() {
   const [tab, setTab] = useState<string | null>(null);
   const [channel, setChannel] = useState("");
   const [q, setQ] = useState("");
+  const [detail, setDetail] = useState<Alert | null>(null);
   const [tick, setTick] = useState(0);
   void tick;
   const ds = useMemo(() => { const a = loadAll(); return a.find((d) => d.id === getSelected()) ?? a[0]; }, []);
@@ -155,35 +157,19 @@ export default function Domestic() {
             );
           })}
         </div>
+        {/* clean rows: account · condition · risk score. Click for the full card. */}
         <div className="space-y-1.5 px-3 pb-3 pt-2.5">
           {alerts.slice(0, 12).map((a) => {
             const acct = a.entities[0] ?? a.title.split("—").pop()?.trim() ?? "unknown";
-            const hot = a.severity === "high" || a.severity === "critical";
+            const condition = a.title.split("—")[0].trim();
             return (
-              <Link key={a.id} to={`/detections/${a.id}`}
-                className={`group flex items-center gap-3 rounded-xl border border-border/60 bg-[color:var(--glass)] px-3 py-2.5 backdrop-blur-md transition-all hover:translate-x-0.5 hover:border-[color:var(--glass-border-hi)] ${hot ? "shadow-[inset_2px_0_0_var(--warning)]" : ""}`}>
-                <RiskCharacter severity={a.severity} size={30} />
-                <div className="min-w-0 flex-1">
-                  <p className="flex items-baseline gap-2">
-                    <span className="mono truncate text-[13px] font-semibold text-foreground group-hover:text-[#c4b5fd]" title={acct}>{shortId(acct)}</span>
-                    <span className="truncate text-[11.5px] text-muted-foreground">{a.title.split("—")[0].trim()}</span>
-                  </p>
-                  {/* the detector's actual measured evidence — what an analyst needs to triage */}
-                  <span className="mt-1 flex flex-wrap gap-1.5">
-                    {a.evidence.slice(0, 3).map((e, i) => (
-                      <span key={i} className="rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10.5px] text-muted-foreground" title={e.label}>
-                        {e.label}: <span className="tnum font-medium text-foreground/90">{e.value}</span>
-                      </span>
-                    ))}
-                    {a.txnIds.length > 0 && (
-                      <span className="rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10.5px] text-muted-foreground" title={a.txnIds.join(", ")}>
-                        {a.txnIds.length} transfer{a.txnIds.length === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </span>
-                </div>
-                <ScoreBar score={a.score} w={64} />
-              </Link>
+              <button key={a.id} onClick={() => setDetail(a)}
+                className="group flex w-full items-center gap-3 rounded-xl border border-border/60 bg-[color:var(--glass)] px-3 py-2.5 text-left backdrop-blur-md transition-all hover:translate-x-0.5 hover:border-[color:var(--glass-border-hi)]">
+                <RiskCharacter severity={a.severity} size={28} />
+                <span className="mono min-w-0 flex-1 truncate text-[13px] font-semibold text-foreground group-hover:text-[#c4b5fd]" title={acct}>{shortId(acct)}</span>
+                <span className="hidden min-w-0 flex-1 truncate text-[12px] text-muted-foreground sm:block">{condition}</span>
+                <ScoreBar score={a.score} w={56} />
+              </button>
             );
           })}
           {alerts.length === 0 && (
@@ -198,6 +184,58 @@ export default function Domestic() {
         </div>
       </Card>
       )}
+      {/* full detail card — everything about one finding, on demand */}
+      {detail && <FindingCard a={detail} onClose={() => setDetail(null)} />}
+    </div>
+  );
+}
+
+/** Slide-in card with everything about one finding: verdict, measured evidence,
+ *  implicated transfers and the route into the full workbench. */
+function FindingCard({ a, onClose }: { a: Alert; onClose: () => void }) {
+  const acct = a.entities[0] ?? a.title.split("—").pop()?.trim() ?? "unknown";
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end" role="dialog" aria-modal="true" aria-label={`Finding for ${acct}`}>
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <aside className="thin-scroll relative h-full w-full max-w-md overflow-y-auto border-l border-border bg-[color:var(--elevated)]/95 p-6 backdrop-blur-2xl animate-in slide-in-from-right duration-300">
+        <div className="flex items-start gap-3">
+          <RiskCharacter severity={a.severity} size={44} />
+          <div className="min-w-0 flex-1">
+            <p className="mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">flagged account</p>
+            <p className="mono text-[15px] font-bold leading-6" title={acct}>{acct}</p>
+            <p className="mt-0.5 text-[12px] text-muted-foreground">{a.title.split("—")[0].trim()} · {a.category}</p>
+          </div>
+          <button onClick={onClose} className="rounded-lg p-1.5 text-muted-foreground transition-colors hover:bg-[color:var(--glass-hi)] hover:text-foreground" aria-label="Close"><X className="h-4 w-4" /></button>
+        </div>
+        <div className="mt-4 flex items-center gap-3">
+          <ScoreBar score={a.score} w={120} />
+          <span className="text-[11px] text-muted-foreground">priority — not a probability of guilt</span>
+        </div>
+        <p className="mt-4 text-[13px] leading-6 text-muted-foreground">{a.explanation}</p>
+        <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Measured evidence</p>
+        <dl className="mt-2 space-y-1.5 text-[13px]">
+          {a.evidence.map((e, i) => (
+            <div key={i} className="flex justify-between gap-3 rounded-lg border border-border/60 bg-[color:var(--glass)] px-3 py-2 backdrop-blur-md">
+              <dt className="text-muted-foreground">{e.label}</dt>
+              <dd className="tnum text-right font-semibold">{e.value}</dd>
+            </div>
+          ))}
+        </dl>
+        {a.txnIds.length > 0 && (
+          <>
+            <p className="mt-5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Implicated transfers ({a.txnIds.length})</p>
+            <div className="mono mt-2 max-h-32 space-y-1 overflow-y-auto text-[11px] text-muted-foreground">
+              {a.txnIds.slice(0, 10).map((t) => <p key={t}>{t}</p>)}
+              {a.txnIds.length > 10 && <p>…and {a.txnIds.length - 10} more</p>}
+            </div>
+          </>
+        )}
+        <div className="mt-5 flex items-center gap-2">
+          <Link to={`/detections/${a.id}`} className={btnPrimary} onClick={onClose}>Open full workbench →</Link>
+          <button onClick={onClose} className={btnGhost}>Close</button>
+        </div>
+        <p className="mt-4 text-[11px] leading-5 text-muted-foreground">Scores rank review order. Every finding needs human review before any conclusion.</p>
+      </aside>
     </div>
   );
 }

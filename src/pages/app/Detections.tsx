@@ -3,19 +3,16 @@ import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV, type NormalizedTxn } from "@/lib/trace/csv";
 import { DEFAULT_RULES, runDetection, type Alert } from "@/lib/trace/detect";
 import { announceAnalysis, readModelMeta } from "@/lib/trace/ml";
-import { api } from "@/convex/_generated/api";
-import { useMutation } from "convex/react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useAuth } from "@/hooks/use-auth";
-import { useReviewStore, type Review } from "@/lib/trace/reviews";
+import { useReviewStore } from "@/lib/trace/reviews";
 import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  Ban, CheckCircle2, ChevronRight, CircleDot, Download, EyeOff, History,
-  Radar, Scale, Search, TriangleAlert, X,
+  ChevronRight, Download, EyeOff, History,
+  Radar, Scale, Search, X,
 } from "lucide-react";
-import type { LucideIcon } from "lucide-react";
 
 /* One severity ladder for every signal surface on this page. */
 const SEV_HEX: Record<string, string> = {
@@ -38,68 +35,6 @@ function StatusPill({ status }: { status: string }) {
       <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
       {status.replace("-", " ")}
     </span>
-  );
-}
-
-const DISPO_STAGES: [Review, string, LucideIcon][] = [
-  ["new", "New", CircleDot],
-  ["reviewing", "Reviewing", Search],
-  ["reviewed", "Reviewed", CheckCircle2],
-  ["false-positive", "False positive", Ban],
-  ["escalated", "Escalated", TriangleAlert],
-];
-
-/** Disposition spectrum: one glass capsule, five stages, and a sliding
- *  status-tinted cursor — replaces the old 2×2 review-button grid. */
-function DispositionSpectrum({ status, busy, shared, onPick }: {
-  status: Review; busy: boolean; shared: boolean; onPick: (s: Review) => void;
-}) {
-  const reduce = useReducedMotion();
-  return (
-    <div className="relative flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/50 px-6 py-3.5">
-      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Disposition</span>
-      <div
-        className={`flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-full border border-border/70 bg-[color:var(--glass)] p-1 backdrop-blur-md ${busy ? "pointer-events-none opacity-60" : ""}`}
-        role="group" aria-label="Set alert disposition"
-      >
-        {DISPO_STAGES.map(([kind, label, Icon]) => {
-          const on = status === kind;
-          const c = REV_COLOR[kind] ?? "var(--primary)";
-          return (
-            <button
-              key={kind}
-              onClick={() => onPick(kind)}
-              disabled={busy}
-              aria-pressed={on}
-              title={on ? `Current disposition: ${label}` : `Mark as ${label.toLowerCase()}`}
-              className="relative shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {on && (
-                <motion.span
-                  layoutId="disposition-cursor" aria-hidden
-                  className="absolute inset-0 rounded-full"
-                  style={{
-                    background: `color-mix(in srgb, ${c} 16%, transparent)`,
-                    border: `1px solid color-mix(in srgb, ${c} 50%, transparent)`,
-                    boxShadow: `0 0 18px -6px ${c}`,
-                  }}
-                  transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 34 }}
-                />
-              )}
-              <span className="relative flex items-center gap-1.5 whitespace-nowrap" style={on ? { color: c } : undefined}>
-                <Icon className="h-3 w-3" /> {label}
-                {on && <span className="h-1 w-1 rounded-full bg-current" aria-hidden />}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-      {!shared && (
-        <p className="flex items-center gap-1.5 rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 px-2.5 py-1.5 text-[10.5px] leading-tight text-foreground/90">
-          <TriangleAlert className="h-3 w-3 shrink-0 text-[color:var(--warning)]" /> Offline — changes save here and sync later.
-        </p>
-      )}
-    </div>
   );
 }
 
@@ -523,7 +458,6 @@ function AmountContext({ txns, all, hex }: { txns: NormalizedTxn[]; all: Normali
 /* ── Full workbench ─────────────────────────────────────────────────────── */
 
 function Workbench({ id }: { id: string }) {
-  const saveCase = useMutation(api.trace.saveInvestigation);
   const [v, setV] = useState(0);
   const [note, setNote] = useState("");
   const { user } = useAuth();
@@ -593,27 +527,6 @@ function Workbench({ id }: { id: string }) {
       ? { label: "deterministic rule match", color: "#60A5FA" }
       : { label: "model signal — unconfirmed", color: "var(--warning)" };
 
-  async function act(kind: Review) {
-    if (busy) return;
-    setBusy(true);
-    setV((x) => x + 1);
-    const ok = await store.setStatus(id, kind, actor);
-    if (kind === "escalated") {
-      try {
-        await Promise.race([
-          saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] }),
-          new Promise((_, rej) => setTimeout(() => rej(new Error("case-timeout")), 12000)),
-        ]);
-        toast.success("Case created", { description: "Linked evidence is waiting in Investigation Cases." });
-      } catch {
-        toast.error("Case creation failed", { description: "Status was still recorded. Retry the escalation from this workbench." });
-      }
-    }
-    setBusy(false);
-    setV((x) => x + 1);
-    if (ok) toast.success(`Marked as ${kind.replace("-", " ")} — synced across reviewers`);
-    else toast.warning("Saved on this device", { description: "Backend unreachable — it will sync when the connection returns." });
-  }
   async function addNote() {
     if (!note.trim() || busy) return;
     const text = note.trim();
@@ -681,12 +594,6 @@ function Workbench({ id }: { id: string }) {
             </div>
           </motion.div>
         </div>
-
-        {/* ── Disposition spectrum — one capsule, five stages, sliding cursor
-              (replaces the old 2×2 review buttons) ── */}
-        <motion.div {...fade(0.16)}>
-          <DispositionSpectrum status={rv} busy={busy} shared={store.shared} onPick={act} />
-        </motion.div>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">

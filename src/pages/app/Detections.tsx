@@ -23,6 +23,7 @@ function Explorer() {
   const [scope, setScope] = useState("");
   const [rev, setRev] = useState("");
   const [method, setMethod] = useState("");
+  const [hi, setHi] = useState(false);
   const [drawer, setDrawer] = useState<Alert | null>(null);
   const [v, setV] = useState(0);
   const store = useReviewStore();
@@ -42,6 +43,7 @@ function Explorer() {
       if (cat && a.category !== cat) return false;
       if (method && a.ruleId !== method) return false;
       if (rev && (rv[a.id] ?? "new") !== rev) return false;
+      if (hi && !(a.severity === "high" || a.severity === "critical")) return false;
       if (scope === "domestic" || scope === "international") {
         const legs = a.txnIds.map((t) => byId.get(t)).filter((t) => t !== undefined);
         const dom = legs.some((t) => t.origin_country === "IN" && t.dest_country === "IN");
@@ -52,18 +54,19 @@ function Explorer() {
       if (q && !(a.title + a.id + a.txnIds.join(" ") + a.entities.join(" ")).toLowerCase().includes(q)) return false;
       return true;
     });
-  }, [ds, all, dsId, sev, cat, method, rev, scope, q, rv]);
+  }, [ds, all, dsId, sev, cat, method, rev, hi, scope, q, rv]);
 
   if (!ds) return <Card><Empty title="No dataset available" body="Upload a transaction CSV or generate a synthetic dataset to begin analysis." /></Card>;
 
   const shown = dsId ? all.find((d) => d.id === dsId) ?? ds : ds;
   const count = (f: (a: Alert) => boolean) => shown.alerts.filter(f).length;
-  const stats: [string, number][] = [
-    ["Total Alerts", shown.alerts.length],
-    ["High-Priority", count((a) => a.severity === "high" || a.severity === "critical")],
-    ["New", count((a) => (rv[a.id] ?? "new") === "new")],
-    ["Under Review", count((a) => (rv[a.id] ?? "new") === "reviewing")],
-    ["Dismissed / Escalated", count((a) => ["false-positive", "escalated", "reviewed"].includes(rv[a.id] ?? ""))],
+  const isHi = (a: Alert) => a.severity === "high" || a.severity === "critical";
+  const statDefs: { k: string; n: number; active: boolean; onClick: () => void }[] = [
+    { k: "Total Alerts", n: shown.alerts.length, active: !rev && !sev && !hi, onClick: () => { setRev(""); setSev(""); setHi(false); } },
+    { k: "High-Priority", n: count(isHi), active: hi, onClick: () => setHi(!hi) },
+    { k: "New", n: count((a) => (rv[a.id] ?? "new") === "new"), active: rev === "new", onClick: () => setRev(rev === "new" ? "" : "new") },
+    { k: "Under Review", n: count((a) => (rv[a.id] ?? "new") === "reviewing"), active: rev === "reviewing", onClick: () => setRev(rev === "reviewing" ? "" : "reviewing") },
+    { k: "Dismissed / Escalated", n: count((a) => ["false-positive", "escalated", "reviewed"].includes(rv[a.id] ?? "")), active: ["false-positive", "escalated", "reviewed"].includes(rev), onClick: () => setRev(rev ? "" : "reviewed") },
   ];
 
   function rerun() {
@@ -76,11 +79,11 @@ function Explorer() {
   return (
     <div className="space-y-3">
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-        {stats.map(([k, n]) => (
-          <div key={k} className="rounded-lg border border-border bg-card px-4 py-2.5">
-            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{k}</p>
-            <p className="tnum text-lg font-bold">{n.toLocaleString("en-IN")}</p>
-          </div>
+        {statDefs.map((s) => (
+          <button key={s.k} onClick={s.onClick} aria-pressed={s.active} title={s.active ? "Click to clear this filter" : `Filter by ${s.k}`} className={`rounded-lg border bg-card px-4 py-2.5 text-left transition ${s.active ? "border-[color:var(--primary)] ring-1 ring-[color:var(--primary)]" : "border-border hover:border-muted-foreground/50"}`}>
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{s.k}</p>
+            <p className="tnum text-lg font-bold">{s.n.toLocaleString("en-IN")}</p>
+          </button>
         ))}
       </div>
       <div className="flex flex-wrap gap-2 text-[13px]">
@@ -188,6 +191,7 @@ function Workbench({ id }: { id: string }) {
   const txns = a.txnIds.map((t) => d.txns.find((x) => x.id === t)).filter(Boolean);
 
   async function act(kind: Review) {
+    setV((x) => x + 1);
     await store.setStatus(id, kind, actor);
     if (kind === "escalated") {
       await saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] });
@@ -196,8 +200,10 @@ function Workbench({ id }: { id: string }) {
   }
   async function addNote() {
     if (!note.trim()) return;
-    await store.addNote(id, note.trim(), actor);
+    const text = note.trim();
     setNote(""); setV((x) => x + 1);
+    await store.addNote(id, text, actor);
+    setV((x) => x + 1);
   }
 
   return (

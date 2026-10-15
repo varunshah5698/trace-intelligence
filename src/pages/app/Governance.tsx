@@ -17,7 +17,7 @@ function reportButtons(ds: Dataset, evalNow: () => ReturnType<typeof evaluate> |
       label: "Data-quality profile",
       fn: () => {
         const lines = [
-          "TRACE data-quality report",
+          "Aegis data-quality report",
           "Dataset: " + ds.name,
           "Records: " + ds.report.records,
           "Warnings:",

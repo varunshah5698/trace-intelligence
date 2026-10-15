@@ -1,6 +1,7 @@
 import { useAuth } from "@/hooks/use-auth";
 import { getSelected, loadAll, setSelected } from "@/lib/trace/store";
 import { seedDemoWorkspace } from "./safety";
+import { Logo } from "./Logo";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import {
@@ -124,10 +125,10 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
   const side = (
     <div className="flex h-full flex-col">
       <Link to="/" className="flex items-center gap-2.5 px-4 pb-4 pt-4" title="Back to home">
-        <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[color:var(--primary)] text-sm font-extrabold text-white">T</div>
+        <Logo size={32} className="shrink-0" />
         {!collapsed && (
           <div className="min-w-0">
-            <p className="truncate text-[13px] font-bold tracking-tight text-foreground">TRACE Intelligence</p>
+            <p className="truncate text-[13px] font-bold tracking-tight text-foreground">Aegis</p>
             <p className="mono truncate text-[10px] text-muted-foreground">connect the evidence</p>
           </div>
         )}

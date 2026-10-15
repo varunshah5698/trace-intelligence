@@ -2,6 +2,7 @@ import { motion, useInView, useMotionValue, useSpring, useTransform } from "fram
 import { ArrowRight, BellRing, FileUp, FlaskConical, Landmark, Network, ShieldAlert, Sparkles } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { Link } from "react-router";
+import { Logo } from "@/components/app/Logo";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
 
@@ -129,9 +130,9 @@ export default function Landing() {
       <header className="relative border-b border-border/70">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-[color:var(--primary)] text-sm font-extrabold text-white">T</div>
+            <Logo size={32} />
             <div>
-              <p className="text-[13px] font-bold tracking-tight">TRACE Intelligence</p>
+              <p className="text-[13px] font-bold tracking-tight">Aegis</p>
               <p className="mono text-[10px] text-muted-foreground">connect the evidence</p>
             </div>
           </div>
@@ -167,7 +168,7 @@ export default function Landing() {
               initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.16, ease: EASE }}
               className="mt-5 max-w-lg text-[15px] leading-7 text-muted-foreground"
             >
-              TRACE analyses Indian domestic transfers and international payments, watches live FX,
+              Aegis analyses Indian domestic transfers and international payments, watches live FX,
               and turns any messy CSV into explainable, review-ready alerts — with honesty about
               what the machine confirms and what it does not.
             </motion.p>
@@ -265,7 +266,7 @@ export default function Landing() {
 
       <footer className="relative border-t border-border/70">
         <div className="mono mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-5 py-5 text-[11px] text-muted-foreground">
-          <span>TRACE Intelligence · every transaction tells a story</span>
+          <span>Aegis · every transaction tells a story</span>
           <Link to="/dashboard" className="hover:text-foreground">back to workspace ↑</Link>
         </div>
       </footer>

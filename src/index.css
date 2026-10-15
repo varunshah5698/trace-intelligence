@@ -3,7 +3,7 @@
 @import "tw-animate-css";
 @custom-variant dark (&:is(.dark *));
 
-/* TRACE Intelligence design tokens — dark default */
+/* Aegis design tokens — dark default */
 :root,
 .dark {
   --radius: 0.5rem;

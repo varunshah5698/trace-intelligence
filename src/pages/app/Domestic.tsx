@@ -54,7 +54,7 @@ export default function Domestic() {
 
   return (
     <div className="space-y-3">
-      <WarnStrip>Channel labels (UPI, IMPS, NEFT, RTGS, bank transfer) describe fields in your file. TRACE is not connected to Indian banking or payment infrastructure.</WarnStrip>
+      <WarnStrip>Channel labels (UPI, IMPS, NEFT, RTGS, bank transfer) describe fields in your file. Aegis is not connected to Indian banking or payment infrastructure.</WarnStrip>
       <div className="flex flex-wrap gap-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Account search…" className="w-52 rounded-md border border-input bg-card px-2.5 py-1.5 text-[13px] outline-none" aria-label="Account search" />
         <select value={channel} onChange={(e) => setChannel(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Payment channel">

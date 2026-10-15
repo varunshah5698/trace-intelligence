@@ -48,7 +48,7 @@ export function ModelNotice({ compact = false }: { compact?: boolean }) {
         <span className="text-muted-foreground">
           {compact
             ? "Nothing here is confirmed as financial crime by any machine-learning model."
-            : "Patterns below are ranked by deterministic rules and an unsupervised anomaly model trained on this dataset. No model in TRACE confirms financial crime — every alert needs human review."}
+            : "Patterns below are ranked by deterministic rules and an unsupervised anomaly model trained on this dataset. No model in Aegis confirms financial crime — every alert needs human review."}
         </span>
       </p>
     </div>

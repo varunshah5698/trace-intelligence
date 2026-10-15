@@ -57,7 +57,7 @@ class RootErrorBoundary extends React.Component<{ children: React.ReactNode }, {
       return (
         <div className="min-h-screen flex items-center justify-center bg-background text-foreground p-6">
           <div className="max-w-lg text-center">
-            <p className="text-sm font-semibold">Something went wrong loading TRACE</p>
+            <p className="text-sm font-semibold">Something went wrong loading Aegis</p>
             <p className="mt-2 text-xs text-muted-foreground break-words">{this.state.message}</p>
           </div>
         </div>

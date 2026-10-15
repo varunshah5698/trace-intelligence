@@ -1,5 +1,6 @@
 import { Card, Empty, PanelTitle, inputCls, num, shortId } from "@/components/app/Shell";
 import { getSelected, loadAll } from "@/lib/trace/store";
+import { formatTrailLine, simulateEntity } from "@/lib/trace/simulate";
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router";
 import { useAuth } from "@/hooks/use-auth";
@@ -78,6 +79,7 @@ function Profile({ id }: { id: string }) {
   tx.forEach((t) => { const k = new Date(t.epoch).toISOString().slice(0, 10); buckets.set(k, (buckets.get(k) ?? 0) + 1); });
   const trend = [...buckets.entries()].sort().slice(-20).map(([d, n]) => ({ d: d.slice(5), n }));
   const currencies = [...new Set(tx.map((t) => t.currency))];
+  const sims = useMemo(() => simulateEntity(id, ds.txns, ds.alerts), [ds, id]);
 
   async function saveNote() {
     if (!note.trim()) return;
@@ -142,6 +144,42 @@ function Profile({ id }: { id: string }) {
           </Card>
         </div>
       </div>
+      {sims.length > 0 && (
+        <Card className="p-5">
+          <PanelTitle title="Flag simulation — why this entity was flagged" sub={`${sims.length} walkthrough(s) · every number below comes from this dataset, nothing invented`} />
+          <div className="space-y-4 px-4 py-3">
+            {sims.map((s) => (
+              <div key={s.alertId} className="rounded-lg border border-border p-4">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <p className="text-sm font-bold">{s.ruleName}</p>
+                  <span className="text-xs text-muted-foreground">{s.category} · score {s.score}/100 · {s.severity}</span>
+                  <Link to={`/detections/${s.alertId}`} className="ml-auto text-xs text-[color:var(--primary)] hover:underline">Open alert →</Link>
+                </div>
+                <ol className="mt-3 space-y-2">
+                  {s.steps.map((st, i) => (
+                    <li key={i} className={`flex gap-3 rounded-md border p-3 ${st.tone === "flag" ? "border-[color:var(--warning)]/40 bg-[color:var(--warning)]/5" : st.tone === "warn" ? "border-[color:var(--destructive)]/30 bg-[color:var(--destructive)]/5" : "border-border/60"}`}>
+                      <span className="tnum flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted text-[11px] font-bold">{i + 1}</span>
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-semibold">{st.title}</p>
+                        <p className="mt-0.5 break-words text-[13px] leading-6 text-muted-foreground">{st.detail}</p>
+                      </div>
+                    </li>
+                  ))}
+                </ol>
+                {s.trail.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Implicated transfers ({s.trail.length})</p>
+                    <div className="mono mt-1.5 space-y-1 text-[11px] text-muted-foreground">
+                      {s.trail.slice(0, 8).map((t) => <p key={t.id} className="break-words">{formatTrailLine(t)}</p>)}
+                      {s.trail.length > 8 && <p>…and {s.trail.length - 8} more — full list in the alert workbench.</p>}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
     </div>
   );
 }

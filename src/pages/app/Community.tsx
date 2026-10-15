@@ -22,10 +22,10 @@ export function Community() {
     <div className="grid gap-4 lg:grid-cols-3">
       <Card className="h-fit p-5">
         <p className="text-sm font-semibold">Share something useful</p>
-        <p className="mt-0.5 text-[13px] text-neutral-500">Post a question, a win, or your own data for feedback.</p>
-        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="A title people will click…" className="mt-3 w-full rounded border border-neutral-200 px-2.5 py-2 text-[13px]" />
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="What is going on? What have you tried?" className="mt-2 w-full rounded border border-neutral-200 p-2.5 text-[13px] leading-6" />
-        <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-neutral-300 p-3 text-[13px] text-neutral-500 hover:bg-neutral-50">
+        <p className="mt-0.5 text-[13px] text-muted-foreground">Post a question, a win, or your own data for feedback.</p>
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="A title people will click…" className="mt-3 w-full rounded border border-input bg-background px-2.5 py-2 text-[13px]" />
+        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={4} placeholder="What is going on? What have you tried?" className="mt-2 w-full rounded border border-input bg-background p-2.5 text-[13px] leading-6" />
+        <label className="mt-2 flex cursor-pointer items-center gap-2 rounded-lg border border-dashed border-border p-3 text-[13px] text-muted-foreground hover:bg-muted">
           <ImagePlus className="h-4 w-4" />
           <span className="truncate">{file || "Attach a file (CSV, screenshot…)"}</span>
           <input type="file" className="hidden" onChange={(e) => setFile(e.target.files?.[0]?.name ?? "")} />
@@ -41,17 +41,17 @@ export function Community() {
               </div>
               <div>
                 <p className="text-sm font-semibold">{p.title}</p>
-                <p className="font-mono text-[11px] text-neutral-400">{p.ownerEmail} · {new Date(p.createdAt).toLocaleString()}{p.attachmentName ? ` · 📎 ${p.attachmentName}` : ""}</p>
+                <p className="mono text-[11px] text-muted-foreground">{p.ownerEmail} · {new Date(p.createdAt).toLocaleString()}{p.attachmentName ? ` · 📎 ${p.attachmentName}` : ""}</p>
               </div>
-              <button onClick={() => setOpen(open === p._id ? null : p._id)} className="ml-auto inline-flex items-center gap-1 rounded border border-neutral-200 px-2.5 py-1 text-xs">
+              <button onClick={() => setOpen(open === p._id ? null : p._id)} className="ml-auto inline-flex items-center gap-1 rounded border border-input bg-background px-2.5 py-1 text-xs">
                 <MessageCircle className="h-3 w-3" /> Discuss
               </button>
             </div>
-            <p className="mt-2 text-[13px] leading-6 text-neutral-600">{p.body}</p>
+            <p className="mt-2 text-[13px] leading-6 text-muted-foreground">{p.body}</p>
             {open === p._id && <Thread thread={`post:${p._id}`} />}
           </Card>
         ))}
-        {posts.length === 0 && <Card className="p-10 text-center text-sm text-neutral-400">Quiet in here. Be the friendly first voice.</Card>}
+        {posts.length === 0 && <Card className="p-10 text-center text-sm text-muted-foreground">Quiet in here. Be the friendly first voice.</Card>}
       </div>
     </div>
   );
@@ -62,19 +62,19 @@ export function Thread({ thread }: { thread: string }) {
   const send = useMutation(api.customer.postComment);
   const [draft, setDraft] = useState("");
   return (
-    <div className="mt-3 border-t border-neutral-100 pt-3">
+    <div className="mt-3 border-t border-border/50 pt-3">
       <div className="max-h-56 space-y-2 overflow-auto">
         {comments.map((c) => (
-          <div key={c._id} className="rounded-lg bg-neutral-50 p-2.5 text-[13px]">
+          <div key={c._id} className="rounded-lg bg-muted/60 p-2.5 text-[13px]">
             <p>{c.body}</p>
-            <p className="mt-0.5 font-mono text-[11px] text-neutral-400">{c.ownerEmail} · {new Date(c.createdAt).toLocaleString()}</p>
+            <p className="mt-0.5 mono text-[11px] text-muted-foreground">{c.ownerEmail} · {new Date(c.createdAt).toLocaleString()}</p>
           </div>
         ))}
-        {comments.length === 0 && <p className="text-[13px] text-neutral-400">No messages yet — say hello.</p>}
+        {comments.length === 0 && <p className="text-[13px] text-muted-foreground">No messages yet — say hello.</p>}
       </div>
       <div className="mt-2 flex gap-2">
-        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Write a message…" className="flex-1 rounded border border-neutral-200 px-2.5 py-1.5 text-[13px]" onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { send({ thread, body: draft.trim() }); setDraft(""); } }} />
-        <button onClick={async () => { if (draft.trim()) { await send({ thread, body: draft.trim() }); setDraft(""); } }} className="rounded bg-neutral-900 px-3 py-1.5 text-white"><Send className="h-3.5 w-3.5" /></button>
+        <input value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Write a message…" className="flex-1 rounded border border-input bg-background px-2.5 py-1.5 text-[13px]" onKeyDown={(e) => { if (e.key === "Enter" && draft.trim()) { send({ thread, body: draft.trim() }); setDraft(""); } }} />
+        <button onClick={async () => { if (draft.trim()) { await send({ thread, body: draft.trim() }); setDraft(""); } }} className="rounded bg-[color:var(--primary)] px-3 py-1.5 text-white"><Send className="h-3.5 w-3.5" /></button>
       </div>
     </div>
   );

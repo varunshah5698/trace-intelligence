@@ -1,99 +1,263 @@
-import { Card, emit } from "@/components/app/Shell";
-import { runDetection } from "@/lib/trace/detect";
-import { getSelected, loadAll, saveAll } from "@/lib/trace/store";
+import { Card, Empty, PanelTitle, SevBadge, btnGhost, btnPrimary, emit } from "@/components/app/Shell";
+import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
+import { toCSV } from "@/lib/trace/csv";
+import { runDetection, type Alert } from "@/lib/trace/detect";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 
+type Review = "new" | "reviewing" | "reviewed" | "false-positive" | "escalated";
+const RKEY = "trace.v1.reviews";
+const NKEY = "trace.v1.alertnotes";
+function reviews(): Record<string, Review> { try { return JSON.parse(localStorage.getItem(RKEY) ?? "{}"); } catch { return {}; } }
+function notes(): Record<string, { at: string; text: string }[]> { try { return JSON.parse(localStorage.getItem(NKEY) ?? "{}"); } catch { return {}; } }
+
 export default function Detections() {
   const { id } = useParams();
+  if (id) return <Workbench id={id} />;
+  return <Explorer />;
+}
+
+function Explorer() {
   const [sp] = useSearchParams();
-  const q = (sp.get("q") ?? "").toLowerCase();
   const [sev, setSev] = useState("");
   const [cat, setCat] = useState("");
+  const [scope, setScope] = useState("");
+  const [rev, setRev] = useState("");
+  const [method, setMethod] = useState("");
+  const [drawer, setDrawer] = useState<Alert | null>(null);
   const [v, setV] = useState(0);
-  const saveCase = useMutation(api.trace.saveInvestigation);
+  const rv = useMemo(() => reviews(), [v]);
+  const q = (sp.get("q") ?? "").toLowerCase();
 
-  const ds = useMemo(() => {
-    const all = loadAll();
-    return all.find((d) => d.id === getSelected()) ?? all[0];
-  }, [v]);
-  if (!ds) return <Card className="p-8 text-sm">No dataset. <Link to="/datasets" className="underline">Upload one</Link>.</Card>;
+  const ds = useMemo(() => { const a = loadAll(); return a.find((d) => d.id === getSelected()) ?? a[0]; }, [v]);
+  const all = useMemo(() => loadAll(), [v]);
+  const [dsId, setDsId] = useState("");
 
-  const filtered = ds.alerts.filter((a) =>
-    (!sev || a.severity === sev) && (!cat || a.category === cat) &&
-    (!q || (a.title + a.id + a.txnIds.join(" ") + a.entities.join(" ")).toLowerCase().includes(q)));
+  const list = useMemo(() => {
+    const src = dsId ? all.find((d) => d.id === dsId) : ds;
+    if (!src) return [];
+    return src.alerts.filter((a) => {
+      if (sev && a.severity !== sev) return false;
+      if (cat && a.category !== cat) return false;
+      if (method && a.ruleId !== method) return false;
+      if (rev && (rv[a.id] ?? "new") !== rev) return false;
+      if (scope === "domestic" || scope === "international") {
+        const legs = a.txnIds.map((t) => src.txns.find((x) => x.id === t)).filter(Boolean);
+        const dom = legs.some((t) => t!.origin_country === "IN" && t!.dest_country === "IN");
+        if (scope === "domestic" && !dom) return false;
+        if (scope === "international" && dom && legs.length <= 1) return false;
+      }
+      if (q && !(a.title + a.id + a.txnIds.join(" ") + a.entities.join(" ")).toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }, [ds, all, dsId, sev, cat, method, rev, scope, q, rv]);
 
-  const detail = id ? ds.alerts.find((a) => a.id === id) : null;
+  if (!ds) return <Card><Empty title="No dataset available" body="Upload a transaction CSV or generate a synthetic dataset to begin analysis." /></Card>;
+
+  const count = (f: (a: Alert) => boolean) => ds.alerts.filter(f).length;
+  const stats: [string, number][] = [
+    ["Total Alerts", ds.alerts.length],
+    ["High-Priority", count((a) => a.severity === "high" || a.severity === "critical")],
+    ["New", count((a) => (rv[a.id] ?? "new") === "new")],
+    ["Under Review", count((a) => (rv[a.id] ?? "new") === "reviewing")],
+    ["Dismissed / Escalated", count((a) => ["false-positive", "escalated", "reviewed"].includes(rv[a.id] ?? ""))],
+  ];
 
   function rerun() {
-    const all = loadAll();
-    const d = all.find((x) => x.id === ds.id)!;
+    const allx = loadAll();
+    const d = allx.find((x) => x.id === ds.id)!;
     d.alerts = runDetection(d.txns, d.rules);
-    saveAll(all); emit(); setV((x) => x + 1);
-  }
-
-  async function escalate(aid: string) {
-    await saveCase({ title: `Case — ${aid}`, status: "open", priority: "medium", datasetId: ds.id, alertIds: [aid], notes: [] });
-    alert("Case created in Investigations.");
-  }
-
-  if (detail) {
-    const txns = detail.txnIds.map((t) => ds.txns.find((x) => x.id === t)).filter(Boolean);
-    return (
-      <div className="space-y-4">
-        <Link to="/detections" className="text-[13px] text-neutral-500">← All detections</Link>
-        <Card className="p-5">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`rounded px-2 py-0.5 text-xs font-medium ${detail.severity === "critical" || detail.severity === "high" ? "bg-neutral-900 text-white" : "bg-neutral-100"}`}>{detail.severity}</span>
-            <span className="text-xs text-neutral-500">{detail.category} · priority {detail.score}/100 (not a probability)</span>
-            <button onClick={() => escalate(detail.id)} className="ml-auto rounded-md border border-neutral-300 px-3 py-1.5 text-xs">Escalate to case</button>
-          </div>
-          <h2 className="mt-2 text-base font-semibold tracking-tight">{detail.title}</h2>
-          <p className="mt-2 max-w-3xl text-[13px] leading-6 text-neutral-600">{detail.explanation}</p>
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-wider text-neutral-400">Evidence</p>
-              <div className="mt-1.5 space-y-1.5 text-[13px]">{detail.evidence.map((e, i) => (
-                <div key={i} className="flex justify-between gap-3 border-b border-neutral-100 pb-1.5"><span className="text-neutral-500">{e.label}</span><span className="text-right font-mono text-xs">{e.value}</span></div>))}</div>
-              <p className="mt-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">Timeline</p>
-              <div className="mt-1.5 space-y-1 text-xs tabular-nums">{txns.map((t) => (
-                <div key={t!.id} className="flex justify-between gap-2 border-b border-neutral-100 pb-1"><span className="font-mono">{t!.id}</span><span>{t!.sender}→{t!.receiver}</span><span>{t!.amount} {t!.currency}</span><span className="text-neutral-400">{t!.timestamp.slice(0, 16).replace("T", " ")}</span></div>))}</div>
-            </div>
-            <div className="space-y-3 text-[13px] leading-6">
-              <div className="rounded border border-neutral-200 p-3"><p className="font-semibold">Plausible legitimate explanation</p><p className="text-neutral-600">{detail.legitimate}</p></div>
-              <div className="rounded border border-neutral-200 p-3"><p className="font-semibold">Suggested checks</p><ul className="list-disc pl-5 text-neutral-600">{detail.checks.map((c, i) => <li key={i}>{c}</li>)}</ul></div>
-              <div className="rounded border border-amber-300 bg-amber-50 p-3"><p className="font-semibold">Missing context</p><p>{detail.limitations}</p></div>
-              <p className="text-xs text-neutral-500">Rule {detail.ruleId} · dataset {ds.name} · wording is neutral (“possible”, “potential”) — never a finding of guilt.</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-    );
+    saveAll(allx); emit(); setV((x) => x + 1);
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-[13px]">
-        <select value={sev} onChange={(e) => setSev(e.target.value)} className="rounded border border-neutral-200 px-2 py-1.5"><option value="">All severities</option><option value="critical">critical</option><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select>
-        <select value={cat} onChange={(e) => setCat(e.target.value)} className="rounded border border-neutral-200 px-2 py-1.5"><option value="">All categories</option>{[...new Set(ds.alerts.map((a) => a.category))].map((c) => <option key={c} value={c}>{c}</option>)}</select>
-        <span className="text-neutral-500">{filtered.length} of {ds.alerts.length} alerts · {ds.name}</span>
-        <button onClick={rerun} className="ml-auto rounded-md bg-neutral-900 px-3 py-1.5 text-xs text-white">Run monitoring job</button>
-      </div>
-      <Card className="divide-y divide-neutral-100 p-0">
-        {filtered.slice(0, 80).map((a) => (
-          <Link key={a.id} to={`/detections/${a.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-neutral-50">
-            <span className={`w-16 shrink-0 rounded px-1.5 py-0.5 text-center text-[11px] font-medium ${a.severity === "high" || a.severity === "critical" ? "bg-neutral-900 text-white" : "bg-neutral-100 text-neutral-600"}`}>{a.severity}</span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-[13px] font-medium">{a.title}</p>
-              <p className="truncate font-mono text-[11px] text-neutral-400">{a.id} · {a.txnIds.slice(0, 3).join(", ")}{a.txnIds.length > 3 ? ` +${a.txnIds.length - 3}` : ""}</p>
-            </div>
-            <span className="shrink-0 text-xs tabular-nums text-neutral-500">{a.score}</span>
-          </Link>
+    <div className="space-y-3">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
+        {stats.map(([k, n]) => (
+          <div key={k} className="rounded-lg border border-border bg-card px-4 py-2.5">
+            <p className="text-[11px] uppercase tracking-wider text-muted-foreground">{k}</p>
+            <p className="tnum text-lg font-bold">{n.toLocaleString("en-IN")}</p>
+          </div>
         ))}
-        {filtered.length === 0 && <p className="px-4 py-10 text-center text-[13px] text-neutral-400">No alerts match. Adjust filters or check unsupported analyses on the dataset page.</p>}
+      </div>
+      <div className="flex flex-wrap gap-2 text-[13px]">
+        <select value={sev} onChange={(e) => setSev(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Priority"><option value="">All priorities</option><option value="critical">critical</option><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select>
+        <select value={cat} onChange={(e) => setCat(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Category"><option value="">All categories</option>{[...new Set(ds.alerts.map((a) => a.category))].map((c) => <option key={c}>{c}</option>)}</select>
+        <select value={scope} onChange={(e) => setScope(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Scope"><option value="">Domestic + Intl</option><option value="domestic">Domestic</option><option value="international">International</option></select>
+        <select value={dsId} onChange={(e) => setDsId(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Dataset"><option value="">Active dataset</option>{all.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
+        <select value={rev} onChange={(e) => setRev(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Review status"><option value="">Any status</option><option value="new">new</option><option value="reviewing">reviewing</option><option value="reviewed">reviewed</option><option value="false-positive">false positive</option><option value="escalated">escalated</option></select>
+        <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Method"><option value="">All methods</option>{[...new Set(ds.alerts.map((a) => a.ruleId))].map((c) => <option key={c}>{c}</option>)}</select>
+        <span className="self-center text-xs text-muted-foreground">{list.length} of {ds.alerts.length}</span>
+        <button onClick={rerun} className="ml-auto rounded-md bg-[color:var(--primary)] px-3 py-1.5 text-xs font-semibold text-white">Run monitoring job</button>
+      </div>
+      <Card>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[980px] text-left text-[13px]">
+            <thead><tr className="border-b border-border text-[11px] uppercase tracking-wider text-muted-foreground">
+              {["Alert ID", "Pattern", "Priority", "Dataset", "Txns", "Entities", "Score", "Status"].map((h) => <th key={h} className="px-3 py-2 font-medium">{h}</th>)}
+            </tr></thead>
+            <tbody>
+              {list.slice(0, 100).map((a) => (
+                <tr key={a.id} className="cursor-pointer border-b border-border/50 hover:bg-muted/40" onClick={() => setDrawer(a)}>
+                  <td className="mono px-3 py-2 text-xs text-[color:var(--primary)]">{a.id.slice(0, 18)}…</td>
+                  <td className="max-w-[280px] truncate px-3 py-2">{a.title}</td>
+                  <td className="px-3 py-2"><SevBadge sev={a.severity} /></td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{ds.name}</td>
+                  <td className="tnum px-3 py-2">{a.txnIds.length}</td>
+                  <td className="mono max-w-[180px] truncate px-3 py-2 text-xs text-muted-foreground">{a.entities.slice(0, 2).join(", ")}</td>
+                  <td className="tnum px-3 py-2 font-semibold" title="Risk-priority score, not a probability">{a.score}</td>
+                  <td className="px-3 py-2 text-xs capitalize text-muted-foreground">{(rv[a.id] ?? "new").replace("-", " ")}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {list.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">No alerts were generated for this analysis run. This does not guarantee that all activity is legitimate.</p>}
+        </div>
       </Card>
+      {drawer && <Drawer a={drawer} dsName={ds.name} onClose={() => { setDrawer(null); setV((x) => x + 1); }} />}
+    </div>
+  );
+}
+
+function setReview(id: string, s: Review) {
+  const r = reviews(); r[id] = s;
+  localStorage.setItem(RKEY, JSON.stringify(r));
+}
+
+function Drawer({ a, dsName, onClose }: { a: Alert; dsName: string; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <aside className="thin-scroll relative h-full w-full max-w-md overflow-y-auto border-l border-border bg-[color:var(--elevated)] p-5">
+        <div className="flex items-center gap-2">
+          <SevBadge sev={a.severity} />
+          <span className="text-xs text-muted-foreground">{a.category} · priority {a.score}/100 — a risk-priority score, not a probability</span>
+        </div>
+        <h3 className="mt-2 text-[15px] font-bold leading-6">{a.title}</h3>
+        <p className="mt-2 text-[13px] leading-6 text-muted-foreground">{a.explanation}</p>
+        <div className="mt-3 space-y-1.5 text-[13px]">
+          {a.evidence.slice(0, 5).map((e, i) => (
+            <div key={i} className="flex justify-between gap-3 border-b border-border/50 pb-1.5"><span className="text-muted-foreground">{e.label}</span><span className="mono text-right text-xs">{e.value}</span></div>
+          ))}
+        </div>
+        <p className="mono mt-3 text-[11px] text-muted-foreground">{a.txnIds.length} transactions · {dsName}</p>
+        <div className="mt-4 flex gap-2">
+          <Link to={`/detections/${a.id}`} className={btnPrimary}>Open full workbench</Link>
+          <button onClick={onClose} className={btnGhost}>Close</button>
+        </div>
+      </aside>
+    </div>
+  );
+}
+
+function Workbench({ id }: { id: string }) {
+  const saveCase = useMutation(api.trace.saveInvestigation);
+  const [v, setV] = useState(0);
+  const [note, setNote] = useState("");
+  const found = useMemo(() => {
+    for (const d of loadAll()) {
+      const a = d.alerts.find((x) => x.id === id);
+      if (a) return { a, d };
+    }
+    return null;
+  }, [id, v]);
+  void v;
+  if (!found) return <Card><Empty title="Alert not found" body="It may belong to a deleted dataset." action={<Link to="/detections" className={btnGhost}>Back to explorer</Link>} /></Card>;
+  const { a, d } = found;
+  const rv = reviews()[id] ?? "new";
+  const ns = notes()[id] ?? [];
+  const txns = a.txnIds.map((t) => d.txns.find((x) => x.id === t)).filter(Boolean);
+
+  async function act(kind: Review, label: string) {
+    setReview(id, kind);
+    if (kind === "escalated") {
+      await saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] });
+    }
+    setV((x) => x + 1);
+    void label;
+  }
+  function addNote() {
+    if (!note.trim()) return;
+    const n = notes(); n[id] = [...(n[id] ?? []), { at: new Date().toISOString(), text: note.trim() }];
+    localStorage.setItem(NKEY, JSON.stringify(n)); setNote(""); setV((x) => x + 1);
+  }
+
+  return (
+    <div className="space-y-3">
+      <Link to="/detections" className="text-[13px] text-muted-foreground hover:text-foreground">← Alert explorer</Link>
+      <div className="grid gap-3 xl:grid-cols-3">
+        {/* evidence column */}
+        <div className="space-y-3 xl:col-span-2">
+          <Card className="p-5">
+            <div className="flex flex-wrap items-center gap-2">
+              <SevBadge sev={a.severity} />
+              <span className="text-xs text-muted-foreground">{a.category} · rule {a.ruleId} v1 · priority {a.score}/100 (risk-priority, not probability)</span>
+            </div>
+            <h2 className="mt-2 text-lg font-bold tracking-tight">{a.title}</h2>
+            <PanelTitle title="Detection explanation" />
+            <p className="px-4 text-[13px] leading-6 text-muted-foreground">{a.explanation}</p>
+            <PanelTitle title="Transaction timeline" sub={`${txns.length} supporting transfers`} />
+            <div className="space-y-1 px-4 pb-1">
+              {txns.map((t) => (
+                <div key={t!.id} className="tnum flex flex-wrap justify-between gap-2 border-b border-border/50 pb-1 text-xs">
+                  <span className="mono text-[color:var(--primary)]">{t!.id}</span>
+                  <span className="mono">{t!.sender} → {t!.receiver}</span>
+                  <span className="font-semibold">{t!.amount.toLocaleString("en-IN")} {t!.currency}</span>
+                  <span className="text-muted-foreground">{t!.timestamp.slice(0, 16).replace("T", " ")}</span>
+                </div>
+              ))}
+            </div>
+            <PanelTitle title="Supporting transactions" />
+            <div className="overflow-x-auto px-4 pb-4">
+              <table className="w-full min-w-[560px] text-left text-xs">
+                <thead><tr className="text-muted-foreground">{["ID", "Sender", "Receiver", "Amount", "Channel", "Route"].map((h) => <th key={h} className="py-1 pr-3 font-medium">{h}</th>)}</tr></thead>
+                <tbody>{txns.map((t) => (
+                  <tr key={t!.id} className="border-t border-border/50"><td className="mono py-1 pr-3 text-[color:var(--primary)]">{t!.id}</td><td className="mono py-1 pr-3">{t!.sender}</td><td className="mono py-1 pr-3">{t!.receiver}</td><td className="tnum py-1 pr-3">{t!.amount.toLocaleString("en-IN")} {t!.currency}</td><td className="py-1 pr-3">{t!.channel}</td><td className="py-1 pr-3">{t!.origin_country}→{t!.dest_country}</td></tr>
+                ))}</tbody>
+              </table>
+            </div>
+            <div className="grid gap-3 px-4 pb-4 md:grid-cols-3">
+              <div className="rounded-lg border border-border p-3 text-[13px]"><p className="font-semibold">Plausible legitimate explanation</p><p className="mt-1 text-muted-foreground">{a.legitimate}</p></div>
+              <div className="rounded-lg border border-border p-3 text-[13px]"><p className="font-semibold">Next checks</p><ul className="mt-1 list-disc pl-4 text-muted-foreground">{a.checks.map((c, i) => <li key={i}>{c}</li>)}</ul></div>
+              <div className="rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 p-3 text-[13px]"><p className="font-semibold">Missing context</p><p className="mt-1">{a.limitations}</p></div>
+            </div>
+          </Card>
+        </div>
+        {/* context column */}
+        <div className="space-y-3">
+          <Card className="p-4 text-[13px]">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Review status: {rv.replace("-", " ")}</p>
+            <dl className="mt-3 space-y-2">
+              {[["Dataset", d.name], ["Detected", new Date().toLocaleDateString()], ["Rule version", `${a.ruleId} v1`], ["Entities", String(a.entities.length)], ["Transactions", String(a.txnIds.length)]].map(([k, x]) => (
+                <div key={k} className="flex justify-between gap-2 border-b border-border/50 pb-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="truncate font-medium">{x}</dd></div>
+              ))}
+            </dl>
+            <div className="mt-3 grid grid-cols-2 gap-1.5">
+              <button onClick={() => act("reviewed", "reviewed")} className={btnGhost}>Mark Reviewed</button>
+              <button onClick={() => act("escalated", "escalated")} className={btnPrimary}>Escalate</button>
+              <button onClick={() => act("false-positive", "dismissed")} className={btnGhost}>Dismiss as False Positive</button>
+              <button onClick={() => act("reviewing", "reviewing")} className={btnGhost}>Keep Reviewing</button>
+            </div>
+            <div className="mt-2 flex gap-1.5">
+              <button onClick={() => download(`${a.id}-evidence.csv`, toCSV(txns.map((t) => ({ id: t!.id, sender: t!.sender, receiver: t!.receiver, amount: t!.amount, currency: t!.currency, ts: t!.timestamp }))))} className={btnGhost}>Export Case</button>
+              <Link to="/audit" className={btnGhost}>View Audit Trail</Link>
+            </div>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Reviewer notes ({ns.length})</p>
+            <div className="mt-2 space-y-2">
+              {ns.map((n, i) => <div key={i} className="rounded border border-border p-2.5 text-[13px]"><p>{n.text}</p><p className="mono mt-1 text-[11px] text-muted-foreground">{new Date(n.at).toLocaleString()}</p></div>)}
+              {ns.length === 0 && <p className="text-[13px] text-muted-foreground">No notes yet.</p>}
+            </div>
+            <div className="mt-2 flex gap-1.5">
+              <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note…" className="flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-[13px] outline-none" />
+              <button onClick={addNote} className={btnPrimary}>Add</button>
+            </div>
+          </Card>
+        </div>
+      </div>
     </div>
   );
 }

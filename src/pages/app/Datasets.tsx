@@ -5,6 +5,7 @@ import { generate } from "@/lib/trace/synthetic";
 import { download, loadAll, saveAll, setSelected, type Dataset } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { prepareTable } from "@/lib/trace/prepare";
+import { announceAnalysis } from "@/lib/trace/ml";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import { ArrowLeft, ArrowRight, CheckCircle2, FileUp, Trash2 } from "lucide-react";
@@ -46,7 +47,7 @@ export default function Datasets() {
     const c2f: Record<string, string> = {};
     m.forEach((x) => { c2f[x.column] = x.field ?? ""; });
     const norm = normalize(t, buildMapping(c2f as never));
-    const alerts = runDetection(norm.txns, DEFAULT_RULES.map((x) => ({ ...x })));
+    const alerts = announceAnalysis("sample dataset", runDetection(norm.txns, DEFAULT_RULES.map((x) => ({ ...x }))));
     const ds: Dataset = {
       id: `ds-${Date.now().toString(36)}`, name: "Demo dataset (synthetic, labelled)", source: "demo",
       createdAt: new Date().toISOString(), columns: cols, mappings: m, col2field: c2f,
@@ -153,7 +154,7 @@ function Wizard({ w, setW, onDone, saveRemote }: { w: Wiz; setW: (x: Wiz | null)
     const runnable = rules.filter((x) => x.minData.every((m) => need[m]));
     const steps = ["Validating data", "Preparing features", "Running rule detection", "Running anomaly analysis", "Running network analysis", "Aggregating results"];
     for (const s of steps) { setPhase(s + "…"); await new Promise((r) => setTimeout(r, 180)); }
-    const alerts = runDetection(txns, runnable);
+    const alerts = announceAnalysis("upload — " + (w.name || "dataset"), runDetection(txns, runnable));
     const r = readiness(map);
     const ds: Dataset = {
       id: `ds-${Date.now().toString(36)}`, name: w.name || "Untitled dataset", source: "upload",

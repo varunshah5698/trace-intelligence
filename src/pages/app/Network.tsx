@@ -2,7 +2,7 @@ import { Card, Empty, PanelTitle, btnGhost } from "@/components/app/Shell";
 import { download, getSelected, loadAll } from "@/lib/trace/store";
 import cytoscape from "cytoscape";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link } from "react-router";
 
 export default function Network() {
   const ds = useMemo(() => { const a = loadAll(); return a.find((d) => d.id === getSelected()) ?? a[0]; }, []);
@@ -177,15 +177,4 @@ export default function Network() {
   );
 }
 
-export function EntityRoute() {
-  const { id } = useParams();
-  return <>{id ? <Profile id={decodeURIComponent(id)} /> : null}</>;
-}
 
-function Profile({ id }: { id: string }) {
-  const ds = loadAll().find((d) => d.id === getSelected()) ?? loadAll()[0];
-  if (!ds) return <Card><Empty title="No dataset" body="Upload data first." /></Card>;
-  const tx = ds.txns.filter((t) => t.sender === id || t.receiver === id);
-  if (!tx.length) return <Card><Empty title="Entity not found" body={`No transfers reference ${id} in the active dataset.`} /></Card>;
-  return <div className="text-[13px]">profile:{id}:{tx.length}</div>;
-}

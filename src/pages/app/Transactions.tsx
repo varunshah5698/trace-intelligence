@@ -2,6 +2,7 @@ import { Card, Empty, PanelTitle, btnGhost, num } from "@/components/app/Shell";
 import { download, getSelected, loadAll } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 
 const PAGE = 25;
 
@@ -90,7 +91,7 @@ export default function Transactions() {
               ].map(([k, v]) => <div key={k} className="flex justify-between gap-3 border-b border-border/50 pb-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="tnum text-right font-medium">{v}</dd></div>)}
             </dl>
             <p className="mt-4 text-xs font-semibold uppercase tracking-wider text-muted-foreground">Detection signals ({signals.length})</p>
-            {signals.map((a) => <a key={a.id} href={`/detections/${a.id}`} className="mt-1.5 block rounded border border-border p-2.5 text-[13px] hover:bg-muted">{a.title}</a>)}
+            {signals.map((a) => <Link key={a.id} to={`/detections/${a.id}`} className="mt-1.5 block rounded border border-border p-2.5 text-[13px] hover:bg-muted">{a.title}</Link>)}
             {signals.length === 0 && <p className="mt-1.5 text-[13px] text-muted-foreground">No detector flagged this record.</p>}
             <button onClick={() => setOpen(null)} className="mt-5 w-full rounded-md border border-border py-2 text-[13px] hover:bg-muted">Close</button>
           </aside>

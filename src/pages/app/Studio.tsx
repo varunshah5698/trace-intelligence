@@ -3,6 +3,7 @@ import { inferMapping, normalize, buildMapping } from "@/lib/trace/csv";
 import { DEFAULT_RULES, runDetection } from "@/lib/trace/detect";
 import { generate, specFromPrompt, type GenSpec } from "@/lib/trace/synthetic";
 import { download, loadAll, saveAll, setSelected, type Dataset } from "@/lib/trace/store";
+import { announceAnalysis } from "@/lib/trace/ml";
 import { Download, FlaskConical, Play, RotateCcw, Sparkles } from "lucide-react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router";
@@ -29,7 +30,7 @@ export default function Studio() {
     const c2f: Record<string, string> = {};
     m.forEach((x) => { c2f[x.column] = x.field ?? ""; });
     const norm = normalize(t, buildMapping(c2f as never));
-    const alerts = runDetect ? runDetection(norm.txns, DEFAULT_RULES.map((x) => ({ ...x }))) : [];
+    const alerts = runDetect ? announceAnalysis("studio — " + spec.name, runDetection(norm.txns, DEFAULT_RULES.map((x) => ({ ...x })))) : [];
     const ds: Dataset = {
       id: `ds-${Date.now().toString(36)}`, name: `${spec.name} (synthetic, labelled)`, source: "synthetic",
       createdAt: new Date().toISOString(), columns: cols, mappings: m, col2field: c2f,

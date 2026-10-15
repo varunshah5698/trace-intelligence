@@ -1,7 +1,8 @@
 import { Card, Empty, PanelTitle, SevBadge, btnGhost, btnPrimary, emit } from "@/components/app/Shell";
 import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
-import { runDetection, type Alert } from "@/lib/trace/detect";
+import { runDetection, verifyAlerts, type Alert } from "@/lib/trace/detect";
+import { announceAnalysis, readModelMeta } from "@/lib/trace/ml";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import { useMemo, useState } from "react";
@@ -38,16 +39,18 @@ function Explorer() {
   const list = useMemo(() => {
     const src = dsId ? all.find((d) => d.id === dsId) : ds;
     if (!src) return [];
+    const byId = new Map(src.txns.map((t) => [t.id, t]));
     return src.alerts.filter((a) => {
       if (sev && a.severity !== sev) return false;
       if (cat && a.category !== cat) return false;
       if (method && a.ruleId !== method) return false;
       if (rev && (rv[a.id] ?? "new") !== rev) return false;
       if (scope === "domestic" || scope === "international") {
-        const legs = a.txnIds.map((t) => src.txns.find((x) => x.id === t)).filter(Boolean);
-        const dom = legs.some((t) => t!.origin_country === "IN" && t!.dest_country === "IN");
+        const legs = a.txnIds.map((t) => byId.get(t)).filter((t) => t !== undefined);
+        const dom = legs.some((t) => t.origin_country === "IN" && t.dest_country === "IN");
+        const intl = legs.some((t) => !(t.origin_country === "IN" && t.dest_country === "IN"));
         if (scope === "domestic" && !dom) return false;
-        if (scope === "international" && dom && legs.length <= 1) return false;
+        if (scope === "international" && !intl) return false;
       }
       if (q && !(a.title + a.id + a.txnIds.join(" ") + a.entities.join(" ")).toLowerCase().includes(q)) return false;
       return true;
@@ -56,9 +59,10 @@ function Explorer() {
 
   if (!ds) return <Card><Empty title="No dataset available" body="Upload a transaction CSV or generate a synthetic dataset to begin analysis." /></Card>;
 
-  const count = (f: (a: Alert) => boolean) => ds.alerts.filter(f).length;
+  const shown = dsId ? all.find((d) => d.id === dsId) ?? ds : ds;
+  const count = (f: (a: Alert) => boolean) => shown.alerts.filter(f).length;
   const stats: [string, number][] = [
-    ["Total Alerts", ds.alerts.length],
+    ["Total Alerts", shown.alerts.length],
     ["High-Priority", count((a) => a.severity === "high" || a.severity === "critical")],
     ["New", count((a) => (rv[a.id] ?? "new") === "new")],
     ["Under Review", count((a) => (rv[a.id] ?? "new") === "reviewing")],
@@ -68,7 +72,7 @@ function Explorer() {
   function rerun() {
     const allx = loadAll();
     const d = allx.find((x) => x.id === ds.id)!;
-    d.alerts = runDetection(d.txns, d.rules);
+    d.alerts = announceAnalysis("monitoring job — " + d.name, runDetection(d.txns, d.rules));
     saveAll(allx); emit(); setV((x) => x + 1);
   }
 
@@ -84,12 +88,12 @@ function Explorer() {
       </div>
       <div className="flex flex-wrap gap-2 text-[13px]">
         <select value={sev} onChange={(e) => setSev(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Priority"><option value="">All priorities</option><option value="critical">critical</option><option value="high">high</option><option value="medium">medium</option><option value="low">low</option></select>
-        <select value={cat} onChange={(e) => setCat(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Category"><option value="">All categories</option>{[...new Set(ds.alerts.map((a) => a.category))].map((c) => <option key={c}>{c}</option>)}</select>
+        <select value={cat} onChange={(e) => setCat(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Category"><option value="">All categories</option>{[...new Set(shown.alerts.map((a) => a.category))].map((c) => <option key={c}>{c}</option>)}</select>
         <select value={scope} onChange={(e) => setScope(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Scope"><option value="">Domestic + Intl</option><option value="domestic">Domestic</option><option value="international">International</option></select>
         <select value={dsId} onChange={(e) => setDsId(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Dataset"><option value="">Active dataset</option>{all.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}</select>
         <select value={rev} onChange={(e) => setRev(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Review status"><option value="">Any status</option><option value="new">new</option><option value="reviewing">reviewing</option><option value="reviewed">reviewed</option><option value="false-positive">false positive</option><option value="escalated">escalated</option></select>
-        <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Method"><option value="">All methods</option>{[...new Set(ds.alerts.map((a) => a.ruleId))].map((c) => <option key={c}>{c}</option>)}</select>
-        <span className="self-center text-xs text-muted-foreground">{list.length} of {ds.alerts.length}</span>
+        <select value={method} onChange={(e) => setMethod(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Method"><option value="">All methods</option>{[...new Set(shown.alerts.map((a) => a.ruleId))].map((c) => <option key={c}>{c}</option>)}</select>
+        <span className="self-center text-xs text-muted-foreground">{list.length} of {shown.alerts.length}</span>
         <button onClick={rerun} className="ml-auto rounded-md bg-[color:var(--primary)] px-3 py-1.5 text-xs font-semibold text-white">Run monitoring job</button>
       </div>
       <Card>
@@ -104,7 +108,7 @@ function Explorer() {
                   <td className="mono px-3 py-2 text-xs text-[color:var(--primary)]">{a.id.slice(0, 18)}…</td>
                   <td className="max-w-[280px] truncate px-3 py-2">{a.title}</td>
                   <td className="px-3 py-2"><SevBadge sev={a.severity} /></td>
-                  <td className="px-3 py-2 text-xs text-muted-foreground">{ds.name}</td>
+                  <td className="px-3 py-2 text-xs text-muted-foreground">{shown.name}</td>
                   <td className="tnum px-3 py-2">{a.txnIds.length}</td>
                   <td className="mono max-w-[180px] truncate px-3 py-2 text-xs text-muted-foreground">{a.entities.slice(0, 2).join(", ")}</td>
                   <td className="tnum px-3 py-2 font-semibold" title="Risk-priority score, not a probability">{a.score}</td>
@@ -116,7 +120,7 @@ function Explorer() {
           {list.length === 0 && <p className="px-4 py-8 text-center text-[13px] text-muted-foreground">No alerts were generated for this analysis run. This does not guarantee that all activity is legitimate.</p>}
         </div>
       </Card>
-      {drawer && <Drawer a={drawer} dsName={ds.name} onClose={() => { setDrawer(null); setV((x) => x + 1); }} />}
+      {drawer && <Drawer a={drawer} dsName={shown.name} onClose={() => { setDrawer(null); setV((x) => x + 1); }} />}
     </div>
   );
 }
@@ -148,6 +152,24 @@ function Drawer({ a, dsName, onClose }: { a: Alert; dsName: string; onClose: () 
           <button onClick={onClose} className={btnGhost}>Close</button>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function VerifyPanel({ a }: { a: Alert }) {
+  const v = verifyAlerts([a], readModelMeta())[0];
+  return (
+    <div className="mx-4 mb-4 rounded-lg border border-border p-3 text-[13px]">
+      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Machine confirmation — {v.confirmedByModel ? "scored by model" : "not confirmed by model"}</p>
+      <ul className="mt-2 space-y-1">
+        {v.checks.map((c, i) => (
+          <li key={i} className="flex gap-2">
+            <span className={c.passed ? "font-bold text-[color:var(--success)]" : "text-muted-foreground"}>{c.passed ? "✓" : "○"}</span>
+            <span className={c.passed ? "" : "text-muted-foreground"}>{c.label}</span>
+          </li>
+        ))}
+      </ul>
+      {v.rulesOnly && <p className="mt-2 text-xs text-muted-foreground">Rules-only signal: a deterministic pattern match, never presented as a model verdict.</p>}
     </div>
   );
 }
@@ -218,6 +240,7 @@ function Workbench({ id }: { id: string }) {
                 ))}</tbody>
               </table>
             </div>
+            <VerifyPanel a={a} />
             <div className="grid gap-3 px-4 pb-4 md:grid-cols-3">
               <div className="rounded-lg border border-border p-3 text-[13px]"><p className="font-semibold">Plausible legitimate explanation</p><p className="mt-1 text-muted-foreground">{a.legitimate}</p></div>
               <div className="rounded-lg border border-border p-3 text-[13px]"><p className="font-semibold">Next checks</p><ul className="mt-1 list-disc pl-4 text-muted-foreground">{a.checks.map((c, i) => <li key={i}>{c}</li>)}</ul></div>
@@ -230,7 +253,7 @@ function Workbench({ id }: { id: string }) {
           <Card className="p-4 text-[13px]">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Review status: {rv.replace("-", " ")}</p>
             <dl className="mt-3 space-y-2">
-              {[["Dataset", d.name], ["Detected", new Date().toLocaleDateString()], ["Rule version", `${a.ruleId} v1`], ["Entities", String(a.entities.length)], ["Transactions", String(a.txnIds.length)]].map(([k, x]) => (
+              {[["Dataset", d.name], ["Dataset added", new Date(d.createdAt).toLocaleDateString()], ["Rule version", `${a.ruleId} v1`], ["Entities", String(a.entities.length)], ["Transactions", String(a.txnIds.length)]].map(([k, x]) => (
                 <div key={k} className="flex justify-between gap-2 border-b border-border/50 pb-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="truncate font-medium">{x}</dd></div>
               ))}
             </dl>

@@ -12,6 +12,11 @@ export interface ReviewNote { at: string; text: string; actor?: string; }
 const RKEY = "trace.v1.reviews";
 const NKEY = "trace.v1.alertnotes";
 
+// In-memory layer: guarantees review actions always take effect visibly, even if
+// the browser's localStorage quota is exhausted by large datasets.
+const memReviews = new Map<string, Review>();
+const memNotes = new Map<string, ReviewNote[]>();
+
 function localReviews(): Record<string, Review> {
   try { return JSON.parse(localStorage.getItem(RKEY) ?? "{}"); } catch { return {}; }
 }
@@ -33,7 +38,7 @@ export function useReviewStore() {
       ((remote ?? []) as { key: string; status: string; notes: ReviewNote[] }[]).map((r) => [r.key, r]),
     );
     const statusOf = (key: string): Review =>
-      (map.get(key)?.status as Review) ?? localReviews()[key] ?? "new";
+      (map.get(key)?.status as Review) ?? localReviews()[key] ?? memReviews.get(key) ?? "new";
     const statusMap = (): Record<string, Review> => {
       const o: Record<string, Review> = { ...localReviews() };
       map.forEach((r, k) => { o[k] = r.status as Review; });
@@ -42,22 +47,26 @@ export function useReviewStore() {
     const notesOf = (key: string): ReviewNote[] => {
       const rn = (map.get(key)?.notes ?? []) as ReviewNote[];
       const ln = localNotes()[key] ?? [];
+      const mn = memNotes.get(key) ?? [];
       const seen = new Set(rn.map((n) => n.at + "|" + n.text));
-      return [...rn, ...ln.filter((n) => !seen.has(n.at + "|" + n.text))]
-        .sort((a, b) => a.at.localeCompare(b.at));
+      const extra = [...ln, ...mn].filter((n) => !seen.has(n.at + "|" + n.text));
+      extra.forEach((n) => seen.add(n.at + "|" + n.text));
+      return [...rn, ...extra].sort((a, b) => a.at.localeCompare(b.at));
     };
-    const setStatus = async (key: string, status: Review, actor: string) => {
+    const setStatus = async (key: string, status: Review, actor: string): Promise<boolean> => {
+      memReviews.set(key, status);
       const r = localReviews();
       r[key] = status;
       writeLocalReviews(r);
-      try { await save({ key, status, actor }); } catch { /* offline — local copy keeps it visible */ }
+      try { await save({ key, status, actor }); return true; } catch { return false; }
     };
-    const addNote = async (key: string, text: string, actor: string) => {
+    const addNote = async (key: string, text: string, actor: string): Promise<boolean> => {
       const note = { at: new Date().toISOString(), text, actor };
+      memNotes.set(key, [...(memNotes.get(key) ?? []), note]);
       const n = localNotes();
       n[key] = [...(n[key] ?? []), note];
       writeLocalNotes(n);
-      try { await save({ key, note, actor }); } catch { /* offline — local copy keeps it visible */ }
+      try { await save({ key, note, actor }); return true; } catch { return false; }
     };
     return { statusOf, statusMap, notesOf, setStatus, addNote, shared: remote !== undefined };
   }, [remote, save]);

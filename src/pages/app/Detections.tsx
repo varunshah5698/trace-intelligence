@@ -9,6 +9,7 @@ import { useMemo, useState } from "react";
 import { Link, useParams, useSearchParams } from "react-router";
 import { useAuth } from "@/hooks/use-auth";
 import { useReviewStore, type Review } from "@/lib/trace/reviews";
+import { toast } from "sonner";
 
 export default function Detections() {
   const { id } = useParams();
@@ -176,6 +177,7 @@ function Workbench({ id }: { id: string }) {
   const { user } = useAuth();
   const store = useReviewStore();
   const actor = String(user?.email ?? "analyst");
+  const [busy, setBusy] = useState(false);
   const found = useMemo(() => {
     for (const d of loadAll()) {
       const a = d.alerts.find((x) => x.id === id);
@@ -191,19 +193,32 @@ function Workbench({ id }: { id: string }) {
   const txns = a.txnIds.map((t) => d.txns.find((x) => x.id === t)).filter(Boolean);
 
   async function act(kind: Review) {
+    if (busy) return;
+    setBusy(true);
     setV((x) => x + 1);
-    await store.setStatus(id, kind, actor);
+    const ok = await store.setStatus(id, kind, actor);
     if (kind === "escalated") {
-      await saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] });
+      try {
+        await saveCase({ title: `Case — ${a.title}`, status: "open", priority: a.severity, datasetId: d.id, alertIds: [id], notes: [] });
+      } catch {
+        toast.error("Case creation failed", { description: "Status was still recorded. Retry the escalation from this workbench." });
+      }
     }
+    setBusy(false);
     setV((x) => x + 1);
+    if (ok) toast.success(`Marked as ${kind.replace("-", " ")} — synced across reviewers`);
+    else toast.warning("Saved on this device", { description: "Backend unreachable — it will sync when the connection returns." });
   }
   async function addNote() {
-    if (!note.trim()) return;
+    if (!note.trim() || busy) return;
     const text = note.trim();
+    setBusy(true);
     setNote(""); setV((x) => x + 1);
-    await store.addNote(id, text, actor);
+    const ok = await store.addNote(id, text, actor);
+    setBusy(false);
     setV((x) => x + 1);
+    if (ok) toast.success("Note shared with all reviewers");
+    else toast.warning("Note saved on this device", { description: "Backend unreachable — it will sync when the connection returns." });
   }
 
   return (
@@ -259,10 +274,10 @@ function Workbench({ id }: { id: string }) {
             </dl>
             {!store.shared && <p className="mt-2 text-xs text-[color:var(--warning)]">Backend unreachable — changes stay on this device until sync.</p>}
             <div className="mt-3 grid grid-cols-2 gap-1.5">
-              <button onClick={() => act("reviewed")} className={btnGhost}>Mark Reviewed</button>
-              <button onClick={() => act("escalated")} className={btnPrimary}>Escalate</button>
-              <button onClick={() => act("false-positive")} className={btnGhost}>Dismiss as False Positive</button>
-              <button onClick={() => act("reviewing")} className={btnGhost}>Keep Reviewing</button>
+              <button onClick={() => act("reviewed")} disabled={busy} className={`${btnGhost} disabled:opacity-50`}>{busy ? "Saving…" : "Mark Reviewed"}</button>
+              <button onClick={() => act("escalated")} disabled={busy} className={`${btnPrimary} disabled:opacity-50`}>{busy ? "Saving…" : "Escalate"}</button>
+              <button onClick={() => act("false-positive")} disabled={busy} className={`${btnGhost} disabled:opacity-50`}>Dismiss as False Positive</button>
+              <button onClick={() => act("reviewing")} disabled={busy} className={`${btnGhost} disabled:opacity-50`}>Keep Reviewing</button>
             </div>
             <div className="mt-2 flex gap-1.5">
               <button onClick={() => download(`${a.id}-evidence.csv`, toCSV(txns.map((t) => ({ id: t!.id, sender: t!.sender, receiver: t!.receiver, amount: t!.amount, currency: t!.currency, ts: t!.timestamp }))))} className={btnGhost}>Export Case</button>
@@ -277,7 +292,7 @@ function Workbench({ id }: { id: string }) {
             </div>
             <div className="mt-2 flex gap-1.5">
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note…" className="flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-[13px] outline-none" />
-              <button onClick={addNote} className={btnPrimary}>Add</button>
+              <button onClick={addNote} disabled={busy} className={`${btnPrimary} disabled:opacity-50`}>Add</button>
             </div>
           </Card>
         </div>

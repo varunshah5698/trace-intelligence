@@ -4,7 +4,7 @@
 // backend rows on read. Every backend write also lands in the audit trail.
 import { api } from "@/convex/_generated/api";
 import { useMutation, useQuery } from "convex/react";
-import { useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 export type Review = "new" | "reviewing" | "reviewed" | "false-positive" | "escalated";
 export interface ReviewNote { at: string; text: string; actor?: string; }
@@ -37,6 +37,33 @@ function withTimeout<T>(p: Promise<T>, ms = 9000): Promise<T | null> {
 export function useReviewStore() {
   const remote = useQuery(api.trace.listAlertReviews);
   const save = useMutation(api.trace.saveAlertReview);
+  // Reconnect backfill: anything recorded while the backend was unreachable
+  // (localStorage + memory) is pushed up the moment the backend answers
+  // again, so "saved on this device" reviews actually sync. Keys already
+  // present remotely are never re-sent.
+  const pushed = useRef(new Set<string>());
+  useEffect(() => {
+    if (remote === undefined) return;
+    const rows = remote as { key: string; status: string; notes: ReviewNote[] }[];
+    const have = new Map(rows.map((r) => [r.key, r]));
+    const put = (pkey: string, key: string, status?: Review, note?: ReviewNote) => {
+      if (pushed.current.has(pkey)) return;
+      pushed.current.add(pkey);
+      save({ key, status, note, actor: note?.actor ?? "reconnect-sync" }).catch(() => { pushed.current.delete(pkey); });
+    };
+    const lr = localReviews();
+    const keys = new Set<string>([...Object.keys(lr), ...memReviews.keys(), ...Object.keys(localNotes()), ...memNotes.keys()]);
+    keys.forEach((key) => {
+      if (!have.has(key)) {
+        const status = memReviews.get(key) ?? lr[key];
+        if (status) put(`s:${key}`, key, status);
+      }
+      const seen = new Set(((have.get(key)?.notes ?? []) as ReviewNote[]).map((n) => `${n.at}|${n.text}`));
+      [...(localNotes()[key] ?? []), ...(memNotes.get(key) ?? [])].forEach((n) => {
+        if (!seen.has(`${n.at}|${n.text}`)) put(`n:${key}:${n.at}|${n.text}`, key, undefined, n);
+      });
+    });
+  }, [remote, save]);
   return useMemo(() => {
     const map = new Map(
       ((remote ?? []) as { key: string; status: string; notes: ReviewNote[] }[]).map((r) => [r.key, r]),

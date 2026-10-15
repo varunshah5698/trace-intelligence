@@ -7,8 +7,10 @@ import { useTheme } from "next-themes";
 import {
   ArrowLeftRight, Bell, BookOpenCheck, Briefcase, Database, FileUp,
   FlaskConical, History, Landmark, LayoutDashboard, LogOut, Menu,
-  Moon, House, Network, Search, Settings, ShieldAlert, Sun, Users, Waypoints, X,
+  Moon, House, Network, Search, Settings, ShieldAlert, Sun, Users, Waypoints, WifiOff, X,
 } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "@/convex/_generated/api";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { emit } from "./ui";
@@ -112,6 +114,14 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loc.pathname]);
 
+  // Backend reachability probe: if the shared review feed still hasn't
+  // resolved after 8s, the frontend can't reach the Convex deployment
+  // (stale/missing VITE_CONVEX_URL) — say so plainly instead of letting
+  // every action fail with a per-button toast.
+  const probe = useQuery(api.trace.listAlertReviews);
+  const [slow, setSlow] = useState(false);
+  useEffect(() => { const t = setTimeout(() => setSlow(true), 8000); return () => clearTimeout(t); }, []);
+  const offline = slow && probe === undefined;
   const active = useMemo(() => loadAll().find((d) => d.id === (getSelected() ?? loadAll()[0]?.id)), [datasets, sel, loc.pathname]);
   const unread = active?.alerts.filter((a) => a.severity === "high" || a.severity === "critical").length ?? 0;
   const crumbs = CRUMBS[loc.pathname] ?? ["Workspace", title];
@@ -265,6 +275,13 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
               </div>
             </div>
           </header>
+          {offline && (
+            <div className="flex flex-wrap items-center gap-2 border-b border-[color:var(--warning)]/40 bg-[color:var(--warning)]/10 px-3 py-2 text-[13px] md:px-5" role="alert">
+              <WifiOff className="h-4 w-4 shrink-0 text-[color:var(--warning)]" />
+              <p className="min-w-0 flex-1"><span className="font-semibold">Sync offline</span> <span className="text-muted-foreground">— the app can't reach its backend, so reviews, notes and cases stay on this device only. Check <span className="mono">VITE_CONVEX_URL</span> in Keys and redeploy.</span></p>
+              <button onClick={() => window.location.reload()} className="shrink-0 rounded-md border border-border px-2.5 py-1 text-xs font-medium hover:bg-muted">Retry connection</button>
+            </div>
+          )}
           <main key={sel ?? "none"} className="px-3 py-5 md:px-6">
             <div className="mb-4">
               <h1 className="text-lg font-bold tracking-tight text-foreground">{title}</h1>

@@ -1,12 +1,14 @@
 import { Card, Empty, PanelTitle, btnGhost } from "@/components/app/Shell";
 import { download, getSelected, loadAll } from "@/lib/trace/store";
 import cytoscape from "cytoscape";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 
 export default function Network() {
   const ds = useMemo(() => { const a = loadAll(); return a.find((d) => d.id === getSelected()) ?? a[0]; }, []);
   const [q, setQ] = useState("");
+  const dq = useDeferredValue(q);
+  const [layoutName, setLayoutName] = useState<"cose" | "concentric" | "circle" | "grid">("cose");
   const [minAmt, setMinAmt] = useState("");
   const [scope, setScope] = useState("");
   const [cur, setCur] = useState("");
@@ -25,8 +27,8 @@ export default function Network() {
     const deg = new Map<string, number>();
     txns.slice(0, 6000).forEach((t) => { deg.set(t.sender, (deg.get(t.sender) ?? 0) + 1); deg.set(t.receiver, (deg.get(t.receiver) ?? 0) + 1); });
     let top = [...deg.entries()].sort((a, b) => b[1] - a[1]).slice(0, maxN).map(([id]) => id);
-    if (q) {
-      const hit = top.filter((id) => id.toLowerCase().includes(q.toLowerCase()));
+    if (dq) {
+      const hit = top.filter((id) => id.toLowerCase().includes(dq.toLowerCase()));
       const nbr = new Set(hit);
       txns.forEach((t) => { if (hit.includes(t.sender)) nbr.add(t.receiver); if (hit.includes(t.receiver)) nbr.add(t.sender); });
       top = [...nbr].slice(0, maxN);
@@ -40,8 +42,10 @@ export default function Network() {
       e.n++; e.v += t.amount; if (e.ids.length < 8) e.ids.push(t.id);
       agg.set(k, e);
     });
-    return { nodes: top.map((id) => ({ id, deg: deg.get(id) ?? 0 })), edges: [...agg.values()].slice(0, 120) };
-  }, [ds, q, minAmt, scope, cur, maxN]);
+    const ranked = top.map((id) => ({ id, deg: deg.get(id) ?? 0 }));
+    const labelSet = new Set(ranked.slice(0, 14).map((n) => n.id));
+    return { nodes: ranked.map((n) => ({ ...n, lbl: labelSet.has(n.id) ? n.id : "" })), edges: [...agg.values()].slice(0, 120) };
+  }, [ds, dq, minAmt, scope, cur, maxN]);
 
   const cycleNodes = useMemo(() => {
     if (!model || highlight !== "cycles") return new Set<string>();
@@ -84,17 +88,18 @@ export default function Network() {
     cy.current = cytoscape({
       container: cyRef.current,
       elements: [
-        ...model.nodes.map((n) => ({ data: { id: n.id, deg: n.deg } })),
+        ...model.nodes.map((n) => ({ data: { id: n.id, deg: n.deg, lbl: n.lbl } })),
         ...model.edges.map((e, i) => ({ data: { id: `e${i}`, source: e.s, target: e.r, n: e.n, v: Math.round(e.v) } })),
       ],
       style: [
-        { selector: "node", style: { "background-color": "#5B8CFF", label: "data(id)", color: "#96A5BA", "font-size": 9, "font-family": "JetBrains Mono, monospace", width: "mapData(deg, 1, 20, 14, 40)", height: "mapData(deg, 1, 20, 14, 40)", "border-width": 1.5, "border-color": "#253247" } },
-        { selector: "node.highlight", style: { "background-color": "#F4B544", "border-color": "#F4B544" } },
-        { selector: "node:selected", style: { "background-color": "#26C6B8", "border-color": "#26C6B8", "border-width": 2.5 } },
+        { selector: "node", style: { "background-color": "#5B8CFF", label: "data(lbl)", color: "#96A5BA", "font-size": 9, "font-family": "JetBrains Mono, monospace", width: "mapData(deg, 1, 20, 14, 40)", height: "mapData(deg, 1, 20, 14, 40)", "border-width": 1.5, "border-color": "#253247" } },
+        { selector: "node.highlight", style: { "background-color": "#F4B544", "border-color": "#F4B544", label: "data(id)" } },
+        { selector: "node:selected", style: { "background-color": "#26C6B8", "border-color": "#26C6B8", "border-width": 2.5, label: "data(id)" } },
+        { selector: ".dim", style: { opacity: 0.12 } },
         { selector: "edge", style: { width: "mapData(n, 1, 10, 1, 5)", "line-color": "#3b4c68", "target-arrow-color": "#3b4c68", "target-arrow-shape": "triangle", "curve-style": "bezier", opacity: 0.8 } },
         { selector: "edge:selected", style: { "line-color": "#26C6B8", "target-arrow-color": "#26C6B8", width: 3 } },
       ],
-      layout: { name: "cose", animate: false, nodeRepulsion: 6000, idealEdgeLength: 90 },
+      layout: { name: "cose", animate: true, animationDuration: 600, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100, padding: 24 },
     });
     if (hot && hot.size) cy.current.nodes().filter((n) => hot.has(n.id())).addClass("highlight");
     cy.current.on("tap", "node", (e) => { setSel(e.target.id()); setEdge(null); });
@@ -104,9 +109,23 @@ export default function Network() {
       setEdge(m ? { s: m.s, r: m.r, ids: m.ids, n: m.n, v: Math.round(m.v) } : null);
     });
     cy.current.on("tap", (e) => { if (e.target === cy.current) { setSel(null); setEdge(null); } });
+    cy.current.on("mouseover", "node", (e) => {
+      const nb = e.target.closedNeighborhood();
+      cy.current?.elements().not(nb).addClass("dim");
+    });
+    cy.current.on("mouseout", "node", () => cy.current?.elements().removeClass("dim"));
     return () => { cy.current?.destroy(); cy.current = null; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]);
+
+  useEffect(() => {
+    if (!cy.current) return;
+    const base = { animate: true, animationDuration: 500, padding: 24, fit: true };
+    const opts = layoutName === "cose"
+      ? { ...base, name: "cose" as const, randomize: false, nodeRepulsion: 8000, idealEdgeLength: 100 }
+      : { ...base, name: layoutName as "concentric" | "circle" | "grid" };
+    cy.current.layout(opts).run();
+  }, [layoutName]);
 
   useEffect(() => {
     if (!cy.current) return;
@@ -133,6 +152,11 @@ export default function Network() {
           <select value={highlight} onChange={(e) => setHighlight(e.target.value as never)} className="rounded-md border border-input bg-background px-2 py-1.5 text-xs" aria-label="Highlight">
             <option value="none">No highlight</option><option value="cycles">Circular routes</option><option value="fan">Fan-in / fan-out</option>
           </select>
+          <div className="flex overflow-hidden rounded-md border border-input text-xs" role="group" aria-label="Graph layout">
+            {( (["cose", "concentric", "circle", "grid"]) as unknown as ("cose" | "concentric" | "circle" | "grid")[]).map((l) => (
+              <button key={l} onClick={() => setLayoutName(l)} className={`px-2 py-1.5 capitalize ${layoutName === l ? "bg-muted font-semibold text-foreground" : "text-muted-foreground hover:text-foreground"}`}>{l}</button>
+            ))}
+          </div>
           <div className="ml-auto flex gap-1.5">
             <button onClick={() => cy.current?.zoom(cy.current.zoom() * 1.25)} className={btnGhost}>+</button>
             <button onClick={() => cy.current?.zoom(cy.current.zoom() / 1.25)} className={btnGhost}>−</button>

@@ -1,4 +1,4 @@
-import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, WarnStrip, btnGhost, btnPrimary, fmtAxis, num, shortId } from "@/components/app/Shell";
+import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, btnGhost, btnPrimary, fmtAxis, num, shortId } from "@/components/app/Shell";
 import type { Alert } from "@/lib/trace/detect";
 import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
@@ -74,7 +74,6 @@ export default function Domestic() {
 
   return (
     <div className="space-y-3">
-      <WarnStrip>Channel labels (UPI, IMPS, NEFT, RTGS, bank transfer) describe fields in your file. Aegis is not connected to Indian banking or payment infrastructure.</WarnStrip>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex items-center gap-1 rounded-md border border-input bg-card p-1" role="group" aria-label="Transaction filters">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Account search…" className="w-44 border-0 bg-transparent px-2 py-1 text-[13px] outline-none placeholder:text-muted-foreground/60" aria-label="Account search" />

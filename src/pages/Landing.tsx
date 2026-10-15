@@ -182,7 +182,7 @@ export default function Landing() {
                 </Link>
               </motion.span>
               <motion.span whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
-                <Link to="/datasets/new" className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium hover:bg-muted">
+                <Link to="/datasets" className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium hover:bg-muted">
                   Upload your CSV
                 </Link>
               </motion.span>

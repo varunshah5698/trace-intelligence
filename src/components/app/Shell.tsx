@@ -5,7 +5,7 @@ import { Logo } from "./Logo";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import {
-  ArrowLeftRight, Bell, BookOpenCheck, Briefcase, Database, FileUp,
+  Bell, BookOpenCheck, Briefcase, Database,
   History, Landmark, LayoutDashboard, LogOut, Menu,
   Moon, House, Network, Search, Settings, ShieldAlert, Sun, Users, Waypoints, WifiOff, X,
 } from "lucide-react";
@@ -33,7 +33,6 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
     head: "Currency Intelligence",
     items: [
       { to: "/fx-market", label: "Live FX Market", icon: Landmark },
-      { to: "/fx-converter", label: "Currency Converter", icon: ArrowLeftRight },
       { to: "/fx-history", label: "FX History", icon: History },
     ],
   },
@@ -41,7 +40,6 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
     head: "Data & Analytics",
     items: [
       { to: "/datasets", label: "Dataset Library", icon: Database },
-      { to: "/datasets/new", label: "Upload CSV", icon: FileUp },
       { to: "/reports", label: "Reports", icon: BookOpenCheck },
     ],
   },
@@ -65,10 +63,8 @@ const CRUMBS: Record<string, string[]> = {
   "/fund-flows": ["Monitoring", "Fund Flows"],
   "/flows": ["Monitoring", "Fund Flows"],
   "/fx-market": ["Currency Intelligence", "Live FX Market"],
-  "/fx-converter": ["Currency Intelligence", "Currency Converter"],
   "/fx-history": ["Currency Intelligence", "FX History"],
   "/datasets": ["Data & Analytics", "Dataset Library"],
-  "/datasets/new": ["Data & Analytics", "Upload CSV"],
   "/rules": ["Data & Analytics", "Detection Rules"],
   "/models": ["Data & Analytics", "Models & Evaluation"],
   "/evaluation": ["Data & Analytics", "Models & Evaluation"],

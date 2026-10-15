@@ -115,7 +115,7 @@ export default function Overview() {
         <Empty
           title="No dataset available"
           body="Upload a transaction CSV or generate a synthetic dataset to begin analysis."
-          action={<Link to="/datasets/new" className="rounded-md bg-[color:var(--primary)] px-4 py-2 text-[13px] font-semibold text-white">Upload CSV</Link>}
+          action={<Link to="/datasets" className="rounded-md bg-[color:var(--primary)] px-4 py-2 text-[13px] font-semibold text-white">Upload CSV</Link>}
         />
       </Card>
     );

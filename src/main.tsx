@@ -11,7 +11,7 @@ import React, { StrictMode, useEffect, lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router";
 import "./index.css";
-import { FxConverter, FxMarket } from "./pages/app/Fx.tsx";
+import { FxMarket } from "./pages/app/Fx.tsx";
 
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
 const Landing = lazy(() => import("./pages/Landing.tsx"));
@@ -121,10 +121,9 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/entities" element={<App title="Entity Intelligence" sub="Searchable accounts, companies, and counterparties."><Entities /></App>} />
                   <Route path="/entities/:id" element={<App title="Entity Intelligence Profile" sub="History, baselines, alerts, and relationships."><Entities /></App>} />
                   <Route path="/fx-market" element={<App title="FX Market" sub="Professional market-data terminal with labelled quote states."><FxMarketWrap /></App>} />
-                  <Route path="/fx-converter" element={<App title="Currency Converter" sub="Source Amount × Destination Units per Source Unit = Converted Amount."><FxConverterWrap /></App>} />
                   <Route path="/fx-history" element={<App title="FX History" sub="Pair, range, and source selectors with actual-data export."><FxHistory /></App>} />
-                  <Route path="/datasets" element={<App title="Dataset Library" sub="Open, profile, analyse, compare, download, delete."><Datasets /></App>} />
-                  <Route path="/datasets/new" element={<App title="Upload CSV" sub="Six steps from file to findings."><Datasets /></App>} />
+                  <Route path="/datasets" element={<App title="Dataset Library" sub="Upload CSV, open, profile, analyse, compare, download, delete — all on one screen."><Datasets /></App>} />
+                  <Route path="/datasets/new" element={<Navigate to="/datasets" replace />} />
                   <Route path="/datasets/:id" element={<App title="Dataset Detail" sub="Quality, rows, manifest, exports."><DatasetDetail /></App>} />
                   <Route path="/monitoring" element={<App title="Transaction Monitoring" sub="Run jobs, review results."><Transactions /></App>} />
                   <Route path="/rules" element={<Navigate to="/models" replace />} />
@@ -149,7 +148,6 @@ createRoot(document.getElementById("root")!).render(
 );
 
 function FxMarketWrap() { return <FxMarket />; }
-function FxConverterWrap() { return <FxConverter />; }
 function GovWrap({ view }: { view: string }) {
   const G = React.lazy(() => import("./pages/app/Governance.tsx"));
   return (

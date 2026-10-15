@@ -1,4 +1,4 @@
-import { Card, Empty, Kpi, PanelTitle, SevBadge, WarnStrip, fmtAxis, num } from "@/components/app/Shell";
+import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, WarnStrip, btnPrimary, fmtAxis, num, shortId } from "@/components/app/Shell";
 import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -6,7 +6,7 @@ import { ArrowRight } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const TABS = ["splitting", "velocity", "pass-through", "network", "behaviour", "structuring", "cross-border"];
-const CHAN_COLORS = ["#5B8CFF", "#26C6B8", "#F4B544", "#9AA8FF", "#36C995", "#F05252"];
+const CHAN_COLORS = ["#8B5CF6", "#2DD4BF", "#FBBF24", "#60A5FA", "#34D399", "#FB7185"];
 
 export default function Domestic() {
   const [tab, setTab] = useState<string | null>(null);
@@ -81,7 +81,7 @@ export default function Domestic() {
             <option value="">All channels</option>{[...new Set(ds.txns.map((t) => t.channel))].map((c) => <option key={c}>{c}</option>)}
           </select>
         </div>
-        <Link to="/transactions" className="ml-auto inline-flex items-center gap-2 rounded-md bg-[color:var(--primary)] px-4 py-2 text-[13px] font-semibold text-white shadow-sm hover:brightness-110">Run analysis <ArrowRight className="h-4 w-4" /></Link>
+        <Link to="/transactions" className={`${btnPrimary} ml-auto`}>Run analysis <ArrowRight className="h-4 w-4" /></Link>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Transactions" value={num(txns.length)} />
@@ -102,8 +102,8 @@ export default function Domestic() {
                 <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={44} tickFormatter={(v: number) => fmtAxis(v)} />
                 <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} iconSize={10} />
-                <Bar dataKey="inn" name="Incoming" fill="#5B8CFF" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="out" name="Outgoing" fill="#F4B544" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="inn" name="Incoming" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="out" name="Outgoing" fill="#FBBF24" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -135,35 +135,65 @@ export default function Domestic() {
             <BarChart data={hour}>
               <XAxis dataKey="h" tick={{ fontSize: 9, fill: "var(--muted-foreground)" }} interval={3} />
               <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
-              <Bar dataKey="n" fill="#5B8CFF" radius={[2, 2, 0, 0]} />
+              <Bar dataKey="n" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         </div>
       </Card>
       {ds.alerts.length > 0 && (
       <Card>
-        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 text-[13px]" role="tablist" aria-label="Findings by pattern">
+        <div className="flex gap-1.5 overflow-x-auto px-3 pt-3" role="tablist" aria-label="Findings by pattern">
           {TABS.map((t) => {
             const n = tabCounts[t] ?? 0;
             const sel = active === t;
             return (
-              <button key={t} role="tab" aria-selected={sel} onClick={() => setTab(t)} className={`whitespace-nowrap px-3 py-2 capitalize ${sel ? "border-b-2 border-[color:var(--primary)] font-semibold text-foreground" : n === 0 ? "text-muted-foreground/50" : "text-muted-foreground"}`}>{t.replace("-", " ")} <span className="tnum text-[11px]">({n})</span></button>
+              <button key={t} role="tab" aria-selected={sel} onClick={() => setTab(t)}
+                className={`inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-[12.5px] capitalize transition-all ${sel ? "border-[color:var(--primary)]/55 bg-[color:var(--primary)]/15 font-semibold text-[#c4b5fd] shadow-[0_0_18px_-6px_rgba(167,139,250,0.7)]" : n === 0 ? "border-transparent text-muted-foreground/45" : "border-border bg-[color:var(--glass)] text-muted-foreground hover:border-[color:var(--glass-border-hi)] hover:text-foreground"}`}>
+                {t.replace("-", " ")}
+                <span className={`tnum rounded-full px-1.5 text-[10px] ${sel ? "bg-[color:var(--primary)]/25" : "bg-muted"}`}>{n}</span>
+              </button>
             );
           })}
         </div>
-        <div className="divide-y divide-border/50">
-          {alerts.slice(0, 12).map((a) => (
-            <Link key={a.id} to={`/detections/${a.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-muted/40">
-              <SevBadge sev={a.severity} />
-              <span className="flex-1 truncate text-[13px]">{a.title}</span>
-              <span className="mono hidden text-[11px] text-muted-foreground md:block">{a.txnIds.slice(0, 2).join(", ")}</span>
-            </Link>
-          ))}
+        <div className="space-y-1.5 px-3 pb-3 pt-2.5">
+          {alerts.slice(0, 12).map((a) => {
+            const acct = a.entities[0] ?? a.title.split("—").pop()?.trim() ?? "unknown";
+            const hot = a.severity === "high" || a.severity === "critical";
+            return (
+              <Link key={a.id} to={`/detections/${a.id}`}
+                className={`group flex items-center gap-3 rounded-xl border border-border/60 bg-[color:var(--glass)] px-3 py-2.5 backdrop-blur-md transition-all hover:translate-x-0.5 hover:border-[color:var(--glass-border-hi)] ${hot ? "shadow-[inset_2px_0_0_var(--warning)]" : ""}`}>
+                <RiskCharacter severity={a.severity} size={30} />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-baseline gap-2">
+                    <span className="mono truncate text-[13px] font-semibold text-foreground group-hover:text-[#c4b5fd]" title={acct}>{shortId(acct)}</span>
+                    <span className="truncate text-[11.5px] text-muted-foreground">{a.title.split("—")[0].trim()}</span>
+                  </p>
+                  {/* the detector's actual measured evidence — what an analyst needs to triage */}
+                  <span className="mt-1 flex flex-wrap gap-1.5">
+                    {a.evidence.slice(0, 3).map((e, i) => (
+                      <span key={i} className="rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10.5px] text-muted-foreground" title={e.label}>
+                        {e.label}: <span className="tnum font-medium text-foreground/90">{e.value}</span>
+                      </span>
+                    ))}
+                    {a.txnIds.length > 0 && (
+                      <span className="rounded-md border border-border/70 bg-background/40 px-1.5 py-0.5 text-[10.5px] text-muted-foreground" title={a.txnIds.join(", ")}>
+                        {a.txnIds.length} transfer{a.txnIds.length === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <ScoreBar score={a.score} w={64} />
+              </Link>
+            );
+          })}
           {alerts.length === 0 && (
-            <div className="px-4 py-6 text-center">
+            <div className="px-4 py-8 text-center">
               <p className="text-[13px] text-muted-foreground">No {active.replace("-", " ")} findings in this dataset.</p>
-              <button onClick={() => setTab(best)} className="mt-2 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted">Show {best.replace("-", " ")} ({tabCounts[best] ?? 0}) instead</button>
+              <button onClick={() => setTab(best)} className="mt-2 rounded-full border border-border px-3 py-1.5 text-xs font-medium transition-colors hover:bg-[color:var(--glass-hi)]">Show {best.replace("-", " ")} ({tabCounts[best] ?? 0}) instead</button>
             </div>
+          )}
+          {alerts.length > 12 && (
+            <Link to="/detections" className="block pt-1 text-center text-xs text-[color:var(--primary)] hover:underline">View all {alerts.length} {active.replace("-", " ")} findings in the detection workbench →</Link>
           )}
         </div>
       </Card>

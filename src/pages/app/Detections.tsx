@@ -12,7 +12,7 @@ import { useReviewStore, type Review } from "@/lib/trace/reviews";
 import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  Ban, CheckCircle2, ChevronRight, Download, Eye, EyeOff, History,
+  Ban, CheckCircle2, ChevronRight, CircleDot, Download, EyeOff, History,
   Radar, Scale, Search, TriangleAlert, X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -38,6 +38,68 @@ function StatusPill({ status }: { status: string }) {
       <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
       {status.replace("-", " ")}
     </span>
+  );
+}
+
+const DISPO_STAGES: [Review, string, LucideIcon][] = [
+  ["new", "New", CircleDot],
+  ["reviewing", "Reviewing", Search],
+  ["reviewed", "Reviewed", CheckCircle2],
+  ["false-positive", "False positive", Ban],
+  ["escalated", "Escalated", TriangleAlert],
+];
+
+/** Disposition spectrum: one glass capsule, five stages, and a sliding
+ *  status-tinted cursor — replaces the old 2×2 review-button grid. */
+function DispositionSpectrum({ status, busy, shared, onPick }: {
+  status: Review; busy: boolean; shared: boolean; onPick: (s: Review) => void;
+}) {
+  const reduce = useReducedMotion();
+  return (
+    <div className="relative flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border/50 px-6 py-3.5">
+      <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Disposition</span>
+      <div
+        className={`flex min-w-0 flex-1 items-center gap-1 overflow-x-auto rounded-full border border-border/70 bg-[color:var(--glass)] p-1 backdrop-blur-md ${busy ? "pointer-events-none opacity-60" : ""}`}
+        role="group" aria-label="Set alert disposition"
+      >
+        {DISPO_STAGES.map(([kind, label, Icon]) => {
+          const on = status === kind;
+          const c = REV_COLOR[kind] ?? "var(--primary)";
+          return (
+            <button
+              key={kind}
+              onClick={() => onPick(kind)}
+              disabled={busy}
+              aria-pressed={on}
+              title={on ? `Current disposition: ${label}` : `Mark as ${label.toLowerCase()}`}
+              className="relative shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground"
+            >
+              {on && (
+                <motion.span
+                  layoutId="disposition-cursor" aria-hidden
+                  className="absolute inset-0 rounded-full"
+                  style={{
+                    background: `color-mix(in srgb, ${c} 16%, transparent)`,
+                    border: `1px solid color-mix(in srgb, ${c} 50%, transparent)`,
+                    boxShadow: `0 0 18px -6px ${c}`,
+                  }}
+                  transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 34 }}
+                />
+              )}
+              <span className="relative flex items-center gap-1.5 whitespace-nowrap" style={on ? { color: c } : undefined}>
+                <Icon className="h-3 w-3" /> {label}
+                {on && <span className="h-1 w-1 rounded-full bg-current" aria-hidden />}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {!shared && (
+        <p className="flex items-center gap-1.5 rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 px-2.5 py-1.5 text-[10.5px] leading-tight text-foreground/90">
+          <TriangleAlert className="h-3 w-3 shrink-0 text-[color:var(--warning)]" /> Offline — changes save here and sync later.
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -618,45 +680,13 @@ function Workbench({ id }: { id: string }) {
               ]}
             </div>
           </motion.div>
-          {/* decisions live in the hero — the old review-desk card is gone */}
-          <motion.div className="flex shrink-0 flex-col items-start gap-2 lg:ml-auto lg:items-end" {...fade(0.16)}>
-            <StatusPill status={rv} />
-            <div className="grid grid-cols-2 gap-1.5">
-              {([
-                ["reviewed", "Mark Reviewed", CheckCircle2],
-                ["escalated", "Escalate", TriangleAlert],
-                ["false-positive", "Dismiss", Ban],
-                ["reviewing", "Keep Reviewing", Eye],
-              ] as [Review, string, LucideIcon][]).map(([kind, label, Icon]) => {
-                const on = rv === kind;
-                const c = REV_COLOR[kind] ?? "var(--primary)";
-                const standing = kind === "escalated" ? btnPrimary : btnGhost;
-                return (
-                  <button
-                    key={kind}
-                    onClick={() => act(kind)}
-                    disabled={busy}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11.5px] font-medium transition-all disabled:opacity-50 ${on ? "" : standing}`}
-                    style={on ? {
-                      color: c,
-                      borderColor: `color-mix(in srgb, ${c} 45%, transparent)`,
-                      background: `color-mix(in srgb, ${c} 12%, transparent)`,
-                      boxShadow: `0 0 20px -8px ${c}`,
-                    } : undefined}
-                    title={on ? `Already marked “${kind.replace("-", " ")}”` : `Mark as ${kind.replace("-", " ")}`}
-                  >
-                    <Icon className="h-3 w-3" /> {busy ? "Saving…" : label}
-                  </button>
-                );
-              })}
-            </div>
-            {!store.shared && (
-              <p className="flex items-center gap-1.5 rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 px-2.5 py-1.5 text-[10.5px] leading-tight text-foreground/90">
-                <TriangleAlert className="h-3 w-3 shrink-0 text-[color:var(--warning)]" /> Offline — actions save here and sync later.
-              </p>
-            )}
-          </motion.div>
         </div>
+
+        {/* ── Disposition spectrum — one capsule, five stages, sliding cursor
+              (replaces the old 2×2 review buttons) ── */}
+        <motion.div {...fade(0.16)}>
+          <DispositionSpectrum status={rv} busy={busy} shared={store.shared} onPick={act} />
+        </motion.div>
       </Card>
 
       <div className="grid gap-4 xl:grid-cols-3">

@@ -108,7 +108,9 @@ function Explorer() {
                 <tr key={a.id} className="cursor-pointer border-b border-border/50 hover:bg-muted/40" onClick={() => setDrawer(a)}>
                   <td className="mono px-3 py-2 text-xs text-[color:var(--primary)]">{a.id.slice(0, 18)}…</td>
                   <td className="max-w-[280px] truncate px-3 py-2">{a.title}</td>
-                  <td className="px-3 py-2"><SevBadge sev={a.severity} /></td>
+                  <td className="px-3 py-2">
+                    <SevBadge sev={a.severity} />
+                  </td>
                   <td className="px-3 py-2 text-xs text-muted-foreground">{shown.name}</td>
                   <td className="tnum px-3 py-2">{a.txnIds.length}</td>
                   <td className="mono max-w-[180px] truncate px-3 py-2 text-xs text-muted-foreground" title={a.entities.slice(0, 2).join(", ")}>{a.entities.slice(0, 2).map(shortId).join(", ")}</td>

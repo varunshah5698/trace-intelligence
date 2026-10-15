@@ -1,10 +1,10 @@
-import { Card, PanelTitle, StatusDot, btnGhost, inputCls } from "@/components/app/Shell";
+import { Card, PanelTitle, Skeleton, StatusDot, btnGhost, inputCls } from "@/components/app/Shell";
 import { PAIRS, fetchHistory, fetchLiveQuotes } from "@/lib/trace/fx";
 import { download } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
-import { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { useMemo, useState } from "react";
+import { Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function FxHistory() {
   const [pair, setPair] = useState("USD/INR");
@@ -19,6 +19,12 @@ export default function FxHistory() {
     max: rows.reduce((a, b) => (b.rate > a.rate ? b : a)),
   } : null;
   const chg = stats ? ((stats.last.rate - stats.first.rate) / stats.first.rate) * 100 : null;
+  const hLoading = hist.isLoading;
+  const hError = hist.isError ? ((hist.error as Error)?.message || "Source unreachable") : null;
+  const withAvg = useMemo(() => rows.map((r, i) => {
+    const win = rows.slice(Math.max(0, i - 6), i + 1);
+    return { ...r, avg: win.reduce((s, x) => s + x.rate, 0) / win.length };
+  }), [rows]);
 
   return (
     <div className="space-y-3">
@@ -53,17 +59,40 @@ export default function FxHistory() {
         <PanelTitle title={`${pair} — daily reference history`} sub={rows.length ? `${rows[0]?.date} → ${rows[rows.length - 1]?.date} · each point timestamped` : "Awaiting source response"} />
         {view === "chart" ? (
           <div className="h-72 px-2 pb-3">
-            {rows.length > 1 ? (
+            {hLoading ? (
+              <Skeleton className="h-full w-full" />
+            ) : hError ? (
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                <p className="text-sm font-semibold">History feed unavailable</p>
+                <p className="mono max-w-md break-words text-[11px] text-muted-foreground">{hError}</p>
+                <button onClick={() => hist.refetch()} className={`${btnGhost} mt-1 text-xs`}>Retry feed</button>
+              </div>
+            ) : rows.length > 1 ? (
               <ResponsiveContainer>
-                <LineChart data={rows}>
+                <ComposedChart data={withAvg}>
+                  <defs>
+                    <linearGradient id="fxg" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#5B8CFF" stopOpacity={0.35} />
+                      <stop offset="100%" stopColor="#5B8CFF" stopOpacity={0.02} />
+                    </linearGradient>
+                  </defs>
                   <CartesianGrid stroke="var(--border)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} tickFormatter={(d: string) => d.slice(5)} minTickGap={30} />
                   <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={56} domain={["auto", "auto"]} tickFormatter={(v: number) => v.toFixed(2)} />
-                  <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} formatter={(v) => [`${Number(v).toFixed(4)}`, "Rate"]} />
-                  <Line type="monotone" dataKey="rate" stroke="#5B8CFF" strokeWidth={1.5} dot={false} />
-                </LineChart>
+                  <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} formatter={(v, name) => [`${Number(v).toFixed(4)}`, name]} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="rate" name="Daily reference" stroke="#5B8CFF" strokeWidth={1.75} fill="url(#fxg)" dot={false} />
+                  <Line type="monotone" dataKey="avg" name="7-day average" stroke="#26C6B8" strokeWidth={1.25} strokeDasharray="4 3" dot={false} />
+                  {stats && <ReferenceDot x={stats.max.date} y={stats.max.rate} r={3.5} fill="#F4B544" stroke="var(--card)" />} 
+                  {stats && <ReferenceDot x={stats.min.date} y={stats.min.rate} r={3.5} fill="#26C6B8" stroke="var(--card)" />} 
+                </ComposedChart>
               </ResponsiveContainer>
-            ) : <p className="px-4 py-10 text-center text-[13px] text-muted-foreground">No historical observations are available for this currency pair and time range.</p>}
+            ) : (
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-center">
+                <p className="text-[13px] text-muted-foreground">No historical observations are available for this currency pair and time range.</p>
+                <button onClick={() => hist.refetch()} className={`${btnGhost} text-xs`}>Retry feed</button>
+              </div>
+            )}
           </div>
         ) : (
           <div className="thin-scroll max-h-96 overflow-y-auto">

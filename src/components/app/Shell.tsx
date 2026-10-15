@@ -1,10 +1,12 @@
 import { useAuth } from "@/hooks/use-auth";
 import { getSelected, loadAll, setSelected } from "@/lib/trace/store";
+import { seedDemoWorkspace } from "./safety";
+import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import {
   ArrowLeftRight, Bell, BookOpenCheck, Briefcase, CalendarDays, Database, FileUp,
   FlaskConical, History, Landmark, LayoutDashboard, LogOut, Menu, MessagesSquare,
-  Moon, Network, Search, Settings, ShieldAlert, ShieldCheck, Store, Sun, Users, Waypoints, X,
+  Moon, House, Network, Search, Settings, ShieldAlert, ShieldCheck, Store, Sun, Users, Waypoints, X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
@@ -12,7 +14,7 @@ import { emit } from "./ui";
 export * from "./ui";
 
 const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
-  { head: "Overview", items: [{ to: "/dashboard", label: "Intelligence Dashboard", icon: LayoutDashboard }] },
+  { head: "Overview", items: [{ to: "/", label: "Back to Home", icon: House }, { to: "/dashboard", label: "Intelligence Dashboard", icon: LayoutDashboard }] },
   {
     head: "Monitoring",
     items: [
@@ -106,6 +108,14 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
     return () => window.removeEventListener("trace:update", f);
   }, [loc.pathname]);
   useEffect(() => setMobileOpen(false), [loc.pathname]);
+  useEffect(() => {
+    const seeded = seedDemoWorkspace();
+    if (seeded) {
+      setDatasets(loadAll());
+      setSel(getSelected());
+      toast.info("Demo workspace ready", { description: "Seeded a labelled synthetic dataset so every chart has real data. Upload your own CSV anytime." });
+    }
+  }, []);
 
   const active = useMemo(() => loadAll().find((d) => d.id === (getSelected() ?? loadAll()[0]?.id)), [datasets, sel, loc.pathname]);
   const unread = active?.alerts.filter((a) => a.severity === "high" || a.severity === "critical").length ?? 0;
@@ -119,7 +129,7 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
 
   const side = (
     <div className="flex h-full flex-col">
-      <Link to="/dashboard" className="flex items-center gap-2.5 px-4 pb-4 pt-4">
+      <Link to="/" className="flex items-center gap-2.5 px-4 pb-4 pt-4" title="Back to home">
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-[color:var(--primary)] text-sm font-extrabold text-white">T</div>
         {!collapsed && (
           <div className="min-w-0">
@@ -241,6 +251,7 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
                   {menuOpen && (
                     <div className="absolute right-0 top-9 w-48 rounded-lg border border-border bg-[color:var(--elevated)] p-1.5 shadow-xl">
                       <p className="truncate px-2 py-1.5 text-xs text-muted-foreground">{String(user?.email ?? "")}</p>
+                      <Link to="/" onClick={() => setMenuOpen(false)} className="block rounded px-2 py-1.5 text-[13px] hover:bg-muted">Back to home</Link>
                       <Link to="/settings" onClick={() => setMenuOpen(false)} className="block rounded px-2 py-1.5 text-[13px] hover:bg-muted">Settings</Link>
                       <button onClick={async () => { await signOut(); nav("/"); }} className="flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-[13px] hover:bg-muted">
                         <LogOut className="h-3.5 w-3.5" /> Sign out
@@ -259,7 +270,7 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
               </div>
             </div>
           </header>
-          <main className="px-3 py-5 md:px-6">
+          <main key={sel ?? "none"} className="px-3 py-5 md:px-6">
             <div className="mb-4">
               <h1 className="text-lg font-bold tracking-tight text-foreground">{title}</h1>
               {sub && <p className="mt-0.5 max-w-3xl text-[13px] text-muted-foreground">{sub}</p>}

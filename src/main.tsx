@@ -14,6 +14,7 @@ import "./index.css";
 import { FxConverter, FxMarket } from "./pages/app/Fx.tsx";
 
 const AuthPage = lazy(() => import("./pages/Auth.tsx"));
+const Landing = lazy(() => import("./pages/Landing.tsx"));
 const Overview = lazy(() => import("./pages/app/Overview.tsx"));
 const Datasets = lazy(() => import("./pages/app/Datasets.tsx"));
 const DatasetDetail = lazy(() => import("./pages/app/DatasetDetail.tsx"));
@@ -111,7 +112,7 @@ createRoot(document.getElementById("root")!).render(
               <RouteSyncer />
               <Suspense fallback={<RouteLoading />}>
                 <Routes>
-                  <Route path="/" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/" element={<Landing />} />
                   <Route path="/auth" element={<AuthPage redirectAfterAuth="/dashboard" />} />
                   <Route path="/login" element={<AuthPage redirectAfterAuth="/dashboard" />} />
                   <Route path="/register" element={<AuthPage redirectAfterAuth="/dashboard" />} />

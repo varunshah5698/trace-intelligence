@@ -146,6 +146,17 @@ export function num(n: number) {
   return n.toLocaleString("en-IN");
 }
 
+/** Global compact standard for chart axes and large aggregates: 2_000_000 → "2M",
+ *  500_000 → "500k", 1_500 → "1.5k". Never emits "1000k"/"2000k". Table cells and
+ *  tooltips keep full locale digits; axes stay compact and international. */
+export function fmtAxis(n: number) {
+  const a = Math.abs(n);
+  if (a >= 1e9) return `${+(n / 1e9).toFixed(1)}B`;
+  if (a >= 1e6) return `${+(n / 1e6).toFixed(1)}M`;
+  if (a >= 1e3) return `${+(n / 1e3).toFixed(1)}k`;
+  return `${Math.round(n)}`;
+}
+
 /** Short display for long entity IDs ("Rajesh Kumar · HDFC ••4821" → "Rajesh Kumar"). Full value stays in title attributes. */
 export function shortId(id: string) {
   const i = id.indexOf(" · ");

@@ -1,13 +1,15 @@
-import { Card, Empty, Kpi, PanelTitle, SevBadge, WarnStrip, num } from "@/components/app/Shell";
+import { Card, Empty, Kpi, PanelTitle, SevBadge, WarnStrip, fmtAxis, num } from "@/components/app/Shell";
 import { getSelected, loadAll } from "@/lib/trace/store";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
-import { Bar, BarChart, CartesianGrid, Cell, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { ArrowRight } from "lucide-react";
+import { Bar, BarChart, CartesianGrid, Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 const TABS = ["splitting", "velocity", "pass-through", "network", "behaviour", "structuring", "cross-border"];
+const CHAN_COLORS = ["#5B8CFF", "#26C6B8", "#F4B544", "#9AA8FF", "#36C995", "#F05252"];
 
 export default function Domestic() {
-  const [tab, setTab] = useState("splitting");
+  const [tab, setTab] = useState<string | null>(null);
   const [channel, setChannel] = useState("");
   const [q, setQ] = useState("");
   const [tick, setTick] = useState(0);
@@ -45,43 +47,63 @@ export default function Domestic() {
 
   if (!ds) return <Card><Empty title="No dataset available" body="Upload a transaction CSV or generate a synthetic dataset to begin analysis." /></Card>;
 
-  const alerts = ds.alerts.filter((a) => a.category === tab || (tab === "network" && (a.category === "network")));
+  // Findings default to the richest tab so the section never opens on an empty state.
+  const tabCounts: Record<string, number> = {};
+  ds.alerts.forEach((a) => { tabCounts[a.category] = (tabCounts[a.category] ?? 0) + 1; });
+  const best = TABS.reduce((a, b) => ((tabCounts[b] ?? 0) > (tabCounts[a] ?? 0) ? b : a), TABS[0]);
+  const active = tab ?? best;
+  const alerts = ds.alerts.filter((a) => a.category === active);
   const inr = txns.filter((t) => t.currency === "INR").reduce((s, t) => s + t.amount, 0);
   const accts = new Set([...txns.map((t) => t.sender), ...txns.map((t) => t.receiver)]);
-  const perAcct = new Map<string, number>();
-  txns.forEach((t) => perAcct.set(t.sender, (perAcct.get(t.sender) ?? 0) + 1));
-  const hiVel = [...perAcct.values()].filter((n) => n > 10).length;
+  const chanTotal = channels.reduce((s, c) => s + c.n, 0);
+  // High velocity = more than 10 sent transfers inside ANY rolling 24h window.
+  const bySender = new Map<string, number[]>();
+  txns.forEach((t) => { const e = bySender.get(t.sender); if (e) e.push(t.epoch); else bySender.set(t.sender, [t.epoch]); });
+  let hiVel = 0;
+  const DAY = 86400000;
+  bySender.forEach((es) => {
+    es.sort((a, b) => a - b);
+    for (let i = 0; i < es.length; i++) {
+      let j = i;
+      while (j + 1 < es.length && es[j + 1] - es[i] <= DAY) j++;
+      if (j - i + 1 > 10) { hiVel++; break; }
+    }
+  });
 
   return (
     <div className="space-y-3">
       <WarnStrip>Channel labels (UPI, IMPS, NEFT, RTGS, bank transfer) describe fields in your file. Aegis is not connected to Indian banking or payment infrastructure.</WarnStrip>
-      <div className="flex flex-wrap gap-2">
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Account search…" className="w-52 rounded-md border border-input bg-card px-2.5 py-1.5 text-[13px] outline-none" aria-label="Account search" />
-        <select value={channel} onChange={(e) => setChannel(e.target.value)} className="rounded-md border border-input bg-card px-2 py-1.5 text-xs" aria-label="Payment channel">
-          <option value="">All channels</option>{[...new Set(ds.txns.map((t) => t.channel))].map((c) => <option key={c}>{c}</option>)}
-        </select>
-        <Link to="/transactions" className="ml-auto rounded-md border border-border px-3 py-1.5 text-[13px] hover:bg-muted">Run Analysis → transactions</Link>
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 rounded-md border border-input bg-card p-1" role="group" aria-label="Transaction filters">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Account search…" className="w-44 border-0 bg-transparent px-2 py-1 text-[13px] outline-none placeholder:text-muted-foreground/60" aria-label="Account search" />
+          <span className="h-5 w-px bg-border" aria-hidden />
+          <select value={channel} onChange={(e) => setChannel(e.target.value)} className="border-0 bg-transparent px-2 py-1 text-xs outline-none" aria-label="Payment channel">
+            <option value="">All channels</option>{[...new Set(ds.txns.map((t) => t.channel))].map((c) => <option key={c}>{c}</option>)}
+          </select>
+        </div>
+        <Link to="/transactions" className="ml-auto inline-flex items-center gap-2 rounded-md bg-[color:var(--primary)] px-4 py-2 text-[13px] font-semibold text-white shadow-sm hover:brightness-110">Run analysis <ArrowRight className="h-4 w-4" /></Link>
       </div>
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Transactions" value={num(txns.length)} />
         <Kpi label="Total INR Value" value={inr ? `${Math.round(inr).toLocaleString("en-IN")} INR` : "—"} sub="INR legs only" />
         <Kpi label="Unique Accounts" value={num(accts.size)} />
         <Kpi label="Detection Alerts" value={num(ds.alerts.length)} />
-        <Kpi label="High-Velocity Accounts" value={num(hiVel)} sub=">10 transfers" />
+        <Kpi label="High-Velocity Accounts" value={num(hiVel)} sub=">10 sent in any 24h window" />
         <Kpi label="Open Reviews" value={num(ds.alerts.filter((a) => a.severity === "high" || a.severity === "critical").length)} />
       </div>
       <div className="grid gap-3 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <PanelTitle title="Domestic volume over time" sub="Incoming vs outgoing value" />
+          <PanelTitle title="Domestic volume over time" sub="Incoming (blue) vs outgoing (amber) value · grouped bars, one pair per day" />
           <div className="h-56 px-2 pb-2">
             <ResponsiveContainer>
-              <BarChart data={buckets}>
+              <BarChart data={buckets} barGap={4}>
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="d" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval="preserveStartEnd" />
-                <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={44} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`} />
+                <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={44} tickFormatter={(v: number) => fmtAxis(v)} />
                 <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                <Legend wrapperStyle={{ fontSize: 11 }} iconSize={10} />
                 <Bar dataKey="inn" name="Incoming" fill="#5B8CFF" radius={[2, 2, 0, 0]} />
-                <Bar dataKey="out" name="Outgoing" fill="#26C6B8" radius={[2, 2, 0, 0]} />
+                <Bar dataKey="out" name="Outgoing" fill="#F4B544" radius={[2, 2, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -92,14 +114,18 @@ export default function Domestic() {
             <ResponsiveContainer>
               <PieChart>
                 <Pie data={channels} dataKey="n" nameKey="name" innerRadius={36} outerRadius={58} paddingAngle={2}>
-                  {channels.map((_, i) => <Cell key={i} fill={["#5B8CFF", "#26C6B8", "#F4B544", "#9AA8FF", "#36C995", "#F05252"][i % 6]} />)}
+                  {channels.map((_, i) => <Cell key={i} fill={CHAN_COLORS[i % CHAN_COLORS.length]} />)}
                 </Pie>
                 <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
               </PieChart>
             </ResponsiveContainer>
           </div>
           <div className="space-y-1 px-4 pb-3 text-xs">{channels.map((c, i) => (
-            <div key={c.name} className="flex justify-between"><span className="text-muted-foreground">{c.name}</span><span className="tnum">{num(c.n)}</span></div>))}</div>
+            <div key={c.name} className="flex items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: CHAN_COLORS[i % CHAN_COLORS.length] }} aria-hidden />
+              <span className="text-muted-foreground">{c.name}</span>
+              <span className="tnum ml-auto">{num(c.n)} · {chanTotal ? Math.round((c.n / chanTotal) * 100) : 0}%</span>
+            </div>))}</div>
         </Card>
       </div>
       <Card>
@@ -114,11 +140,16 @@ export default function Domestic() {
           </ResponsiveContainer>
         </div>
       </Card>
+      {ds.alerts.length > 0 && (
       <Card>
-        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 text-[13px]">
-          {TABS.map((t) => (
-            <button key={t} onClick={() => setTab(t)} className={`whitespace-nowrap px-3 py-2 capitalize ${tab === t ? "border-b-2 border-[color:var(--primary)] font-semibold text-foreground" : "text-muted-foreground"}`}>{t.replace("-", " ")}</button>
-          ))}
+        <div className="flex gap-1 overflow-x-auto border-b border-border px-2 text-[13px]" role="tablist" aria-label="Findings by pattern">
+          {TABS.map((t) => {
+            const n = tabCounts[t] ?? 0;
+            const sel = active === t;
+            return (
+              <button key={t} role="tab" aria-selected={sel} onClick={() => setTab(t)} className={`whitespace-nowrap px-3 py-2 capitalize ${sel ? "border-b-2 border-[color:var(--primary)] font-semibold text-foreground" : n === 0 ? "text-muted-foreground/50" : "text-muted-foreground"}`}>{t.replace("-", " ")} <span className="tnum text-[11px]">({n})</span></button>
+            );
+          })}
         </div>
         <div className="divide-y divide-border/50">
           {alerts.slice(0, 12).map((a) => (
@@ -128,9 +159,15 @@ export default function Domestic() {
               <span className="mono hidden text-[11px] text-muted-foreground md:block">{a.txnIds.slice(0, 2).join(", ")}</span>
             </Link>
           ))}
-          {alerts.length === 0 && <p className="px-4 py-6 text-center text-[13px] text-muted-foreground">No {tab} findings in this dataset. Switch tabs or adjust rules.</p>}
+          {alerts.length === 0 && (
+            <div className="px-4 py-6 text-center">
+              <p className="text-[13px] text-muted-foreground">No {active.replace("-", " ")} findings in this dataset.</p>
+              <button onClick={() => setTab(best)} className="mt-2 rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted">Show {best.replace("-", " ")} ({tabCounts[best] ?? 0}) instead</button>
+            </div>
+          )}
         </div>
       </Card>
+      )}
     </div>
   );
 }

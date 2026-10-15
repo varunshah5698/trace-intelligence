@@ -95,10 +95,10 @@ export default function Domestic() {
       </div>
       <div className="grid gap-3 xl:grid-cols-3">
         <Card className="xl:col-span-2">
-          <PanelTitle title="Domestic volume over time" sub="Incoming (blue) vs outgoing (amber) value · grouped bars, one pair per day" />
-          <div className="h-56 px-2 pb-2">
+          <PanelTitle title="Domestic volume over time" sub="Incoming (violet) vs outgoing (amber) value · grouped bars, one pair per day" />
+          <div className="h-64 px-2 pb-2">
             <ResponsiveContainer>
-              <BarChart data={buckets} barGap={4}>
+              <BarChart data={buckets} barGap={2} barCategoryGap="18%">
                 <CartesianGrid stroke="var(--border)" vertical={false} />
                 <XAxis dataKey="d" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} interval="preserveStartEnd" />
                 <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={44} tickFormatter={(v: number) => fmtAxis(v)} />
@@ -110,24 +110,64 @@ export default function Domestic() {
             </ResponsiveContainer>
           </div>
         </Card>
-        <Card>
-          <PanelTitle title="Payment-channel distribution" sub="Only channels present in data" />
-          <div className="h-40">
-            <ResponsiveContainer>
+        <Card className="flex flex-col">
+          <PanelTitle title="Payment-channel distribution" sub="Share of transfers per rail · only channels present in data" />
+          <div className="relative min-h-44 flex-1 px-2">
+            <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={channels} dataKey="n" nameKey="name" innerRadius={36} outerRadius={58} paddingAngle={2}>
-                  {channels.map((_, i) => <Cell key={i} fill={CHAN_COLORS[i % CHAN_COLORS.length]} />)}
+                <defs>
+                  {CHAN_COLORS.map((c, i) => (
+                    <linearGradient key={c} id={`chan-${i}`} x1="0" y1="0" x2="1" y2="1">
+                      <stop offset="0%" stopColor={c} stopOpacity={1} />
+                      <stop offset="100%" stopColor={c} stopOpacity={0.55} />
+                    </linearGradient>
+                  ))}
+                </defs>
+                <Pie
+                  data={channels}
+                  dataKey="n"
+                  nameKey="name"
+                  innerRadius="62%"
+                  outerRadius="94%"
+                  paddingAngle={3}
+                  cornerRadius={6}
+                  stroke="var(--elevated)"
+                  strokeWidth={2}
+                  cursor="pointer"
+                  isAnimationActive
+                  animationDuration={700}
+                >
+                  {channels.map((_, i) => <Cell key={i} fill={`url(#chan-${i % CHAN_COLORS.length})`} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                <Tooltip
+                  cursor={false}
+                  contentStyle={{
+                    background: "color-mix(in srgb, var(--elevated) 88%, transparent)",
+                    border: "1px solid var(--border)",
+                    borderRadius: 10,
+                    fontSize: 12,
+                    backdropFilter: "blur(10px)",
+                    boxShadow: "0 10px 30px -12px rgba(139, 92, 246, 0.45)",
+                  }}
+                  formatter={(v, n) => [`${num(Number(v))} transfers`, String(n) === "n" ? "count" : String(n)]}
+                />
               </PieChart>
             </ResponsiveContainer>
+            {/* Center: total the donut represents */}
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <span className="display tnum text-3xl font-extrabold leading-none">{num(chanTotal)}</span>
+              <span className="mt-1 text-[10px] tracking-[0.18em] text-muted-foreground uppercase">transfers</span>
+            </div>
           </div>
-          <div className="space-y-1 px-4 pb-3 text-xs">{channels.map((c, i) => (
-            <div key={c.name} className="flex items-center gap-2">
-              <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: CHAN_COLORS[i % CHAN_COLORS.length] }} aria-hidden />
-              <span className="text-muted-foreground">{c.name}</span>
-              <span className="tnum ml-auto">{num(c.n)} · {chanTotal ? Math.round((c.n / chanTotal) * 100) : 0}%</span>
-            </div>))}</div>
+          <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1 border-t border-dashed px-4 pt-3 pb-4 text-xs">
+            {channels.map((c, i) => (
+              <div key={c.name} className="flex items-center gap-2 rounded-md px-1 py-1 transition-colors hover:bg-[color:var(--glass-hi)]">
+                <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: CHAN_COLORS[i % CHAN_COLORS.length] }} aria-hidden />
+                <span className="min-w-0 flex-1 truncate text-muted-foreground">{c.name}</span>
+                <span className="tnum font-medium">{chanTotal ? Math.round((c.n / chanTotal) * 100) : 0}%</span>
+              </div>
+            ))}
+          </div>
         </Card>
       </div>
       <Card>

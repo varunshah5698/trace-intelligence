@@ -34,7 +34,20 @@ const CAPS = [
 
 export default function Landing() {
   return (
-    <div className="min-h-screen overflow-x-clip bg-background font-sans text-foreground antialiased">
+    <div className="relative min-h-screen overflow-x-clip bg-background font-sans text-foreground antialiased">
+      {/* full-page video background, tinted to match the Aegis color scheme */}
+      <video
+        className="pointer-events-none fixed inset-0 h-full w-full object-cover"
+        src={HERO_VIDEO}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden
+      />
+      <div className="pointer-events-none fixed inset-0 bg-[#0a0f18]/80" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-[color:var(--primary)]/15 via-transparent to-[color:var(--teal)]/10" aria-hidden />
       {/* ambient glow */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
         <motion.div className="absolute -top-40 left-1/4 h-[28rem] w-[28rem] rounded-full bg-[color:var(--primary)]/15 blur-[130px]"
@@ -43,7 +56,7 @@ export default function Landing() {
           animate={{ x: [0, -50, 0], y: [0, 40, 0] }} transition={{ duration: 17, repeat: Infinity, ease: "easeInOut" }} />
       </div>
 
-      <header className="relative border-b border-border/70">
+      <header className="relative border-b border-border/70 bg-background/60 backdrop-blur-md">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
           <div className="flex items-center gap-3">
             <Logo size={46} />
@@ -63,19 +76,7 @@ export default function Landing() {
 
       <main className="relative mx-auto max-w-6xl px-5">
         {/* hero with video background */}
-        <section className="relative -mx-5 overflow-hidden" aria-label="Aegis introduction">
-          <video
-            className="absolute inset-0 h-full w-full object-cover"
-            src={HERO_VIDEO}
-            autoPlay
-            muted
-            loop
-            playsInline
-            preload="metadata"
-            aria-hidden
-          />
-          <div className="absolute inset-0 bg-background/70" aria-hidden />
-          <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-transparent to-background" aria-hidden />
+        <section className="relative" aria-label="Aegis introduction">
           <div className="relative mx-auto max-w-3xl px-5 py-24 text-center md:py-36">
             <motion.h1
               initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.08, ease: EASE }}
@@ -119,7 +120,7 @@ export default function Landing() {
             {CAPS.map((c, i) => (
               <Rise key={c.t} delay={(i % 3) * 0.08}>
                 <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 300, damping: 22 }}
-                  className="h-full rounded-xl border border-border bg-card p-5">
+                  className="h-full rounded-xl border border-border bg-card/70 p-5 backdrop-blur-md">
                   <c.icon className="h-5 w-5 text-[color:var(--primary)]" strokeWidth={1.75} />
                   <p className="mt-3 text-sm font-semibold">{c.t}</p>
                   <p className="mt-1.5 text-[13px] leading-6 text-muted-foreground">{c.d}</p>
@@ -131,7 +132,7 @@ export default function Landing() {
 
         {/* honesty band */}
         <Rise>
-          <section className="mb-14 rounded-xl border border-[color:var(--primary)]/30 bg-[color:var(--primary)]/5 p-6 md:p-8">
+          <section className="mb-14 rounded-xl border border-[color:var(--primary)]/30 bg-[color:var(--primary)]/10 p-6 backdrop-blur-md md:p-8">
             <h2 className="text-lg font-bold tracking-tight">Honest by design</h2>
             <div className="mt-3 grid gap-4 text-[13px] leading-6 text-muted-foreground md:grid-cols-3">
               <p><span className="font-semibold text-foreground">Scores are priorities,</span> not probabilities of crime. Country, channel, or amount alone never decide an alert.</p>

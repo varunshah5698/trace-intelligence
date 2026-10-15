@@ -34,7 +34,7 @@ const CAPS = [
 
 export default function Landing() {
   return (
-    <div className="relative min-h-screen overflow-x-clip bg-[#04060b] font-sans text-foreground antialiased">
+    <div className="relative min-h-screen overflow-x-clip bg-[#070611] font-sans text-foreground antialiased">
       {/* full-page video background, tinted to match the Aegis color scheme */}
       <video
         className="pointer-events-none fixed inset-0 h-full w-full object-cover"
@@ -47,8 +47,8 @@ export default function Landing() {
         aria-hidden
       />
       <div className="pointer-events-none fixed inset-0 bg-black/35" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/70 via-transparent to-[#04060b]" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(125%_95%_at_50%_42%,transparent_0%,rgba(4,6,11,0.72)_100%)]" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/70 via-transparent to-[#070611]" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(125%_95%_at_50%_42%,transparent_0%,rgba(7,6,17,0.74)_100%)]" aria-hidden />
       {/* ambient glow — violet to echo the globe in the video */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
         <motion.div className="absolute -top-40 left-1/4 h-[28rem] w-[28rem] rounded-full bg-[#7c5cff]/20 blur-[130px]"
@@ -57,19 +57,19 @@ export default function Landing() {
           animate={{ x: [0, -50, 0], y: [0, 40, 0] }} transition={{ duration: 17, repeat: Infinity, ease: "easeInOut" }} />
       </div>
 
-      <header className="relative border-b border-border/70 bg-background/60 backdrop-blur-md">
+      <header className="relative border-b border-border/60 bg-[#070611]/50 backdrop-blur-xl">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-3">
-            <Logo size={46} />
+          <div className="group flex items-center gap-3">
+            <span className="transition-transform duration-300 group-hover:scale-105 group-hover:rotate-3"><Logo size={42} /></span>
             <div className="leading-tight">
-              <p className="text-[20px] font-extrabold tracking-tight">Aegis</p>
-              <p className="mono text-[11px] tracking-wide text-muted-foreground">connect the evidence</p>
+              <p className="display text-[20px] font-bold tracking-tight">Aegis</p>
+              <p className="mono text-[10px] tracking-wide text-muted-foreground">connect the evidence</p>
             </div>
           </div>
           <nav className="flex items-center gap-2">
-            <Link to="/auth" className="rounded-md px-3 py-2 text-sm text-muted-foreground hover:bg-muted hover:text-foreground">Sign in</Link>
+            <Link to="/auth" className="rounded-full px-4 py-2 text-sm text-muted-foreground transition-colors hover:bg-[color:var(--glass-hi)] hover:text-foreground">Sign in</Link>
             <motion.span whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.97 }}>
-              <Link to="/dashboard" className="rounded-md bg-[color:var(--primary)] px-4 py-2 text-sm font-semibold text-white">Open workspace</Link>
+              <Link to="/dashboard" className="grad-bg inline-block rounded-full px-4.5 py-2 text-sm font-semibold text-white shadow-[0_8px_28px_-10px_rgba(139,92,246,0.9)]">Open workspace</Link>
             </motion.span>
           </nav>
         </div>
@@ -81,10 +81,10 @@ export default function Landing() {
           <div className="relative mx-auto max-w-3xl px-5 py-32 text-center md:py-48">
             <motion.h1
               initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.08, ease: EASE }}
-              className="text-4xl font-extrabold leading-[1.06] tracking-tight md:text-[3.4rem]"
+              className="display text-4xl font-bold leading-[1.06] tracking-tight md:text-[3.4rem]"
             >
               Every transaction tells a story.{" "}
-              <span className="bg-gradient-to-r from-[#b39bff] to-[color:var(--primary)] bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#c4b5fd] via-[#a78bfa] to-[#f472b6] bg-[length:200%_auto] bg-clip-text text-transparent">
                 Connect the evidence.
               </span>
             </motion.h1>
@@ -101,12 +101,12 @@ export default function Landing() {
               className="mt-7 flex flex-wrap justify-center gap-3"
             >
               <motion.span whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
-                <Link to="/dashboard" className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[color:var(--primary)]/25">
+                <Link to="/dashboard" className="grad-bg inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-white shadow-[0_14px_40px_-12px_rgba(236,72,153,0.7)]">
                   Start investigating <ArrowRight className="h-4 w-4" />
                 </Link>
               </motion.span>
               <motion.span whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
-                <Link to="/datasets" className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-3 text-sm font-medium hover:bg-muted">
+                <Link to="/datasets" className="glass inline-flex items-center gap-2 rounded-full px-6 py-3 text-sm font-medium text-foreground transition-colors hover:border-[color:var(--glass-border-hi)]">
                   Upload your CSV
                 </Link>
               </motion.span>
@@ -116,14 +116,18 @@ export default function Landing() {
 
         {/* capabilities */}
         <section className="py-14">
-          <Rise><h2 className="text-xl font-bold tracking-tight">One workspace, six crafts</h2></Rise>
+          <Rise><h2 className="display text-xl font-bold tracking-tight">One workspace, six crafts</h2></Rise>
           <div className="mt-6 grid gap-3 md:grid-cols-2 lg:grid-cols-3">
             {CAPS.map((c, i) => (
               <Rise key={c.t} delay={(i % 3) * 0.08}>
                 <motion.div whileHover={{ y: -4 }} transition={{ type: "spring", stiffness: 300, damping: 22 }}
-                  className="h-full rounded-xl border border-border bg-card/70 p-5 backdrop-blur-md">
-                  <c.icon className="h-5 w-5 text-[color:var(--primary)]" strokeWidth={1.75} />
-                  <p className="mt-3 text-sm font-semibold">{c.t}</p>
+                  className="glass group h-full rounded-2xl p-5">
+                  <div className="grad-bg flex h-9 w-9 items-center justify-center rounded-xl p-px shadow-[0_8px_24px_-10px_rgba(139,92,246,0.8)] transition-transform duration-300 group-hover:scale-110 group-hover:rotate-3">
+                    <span className="flex h-full w-full items-center justify-center rounded-[10px] bg-[#0b0a1a]/80">
+                      <c.icon className="h-4 w-4 text-[#c4b5fd]" strokeWidth={1.75} />
+                    </span>
+                  </div>
+                  <p className="display mt-3.5 text-sm font-semibold">{c.t}</p>
                   <p className="mt-1.5 text-[13px] leading-6 text-muted-foreground">{c.d}</p>
                 </motion.div>
               </Rise>
@@ -133,14 +137,14 @@ export default function Landing() {
 
         {/* honesty band */}
         <Rise>
-          <section className="mb-14 rounded-xl border border-[color:var(--primary)]/30 bg-[color:var(--primary)]/10 p-6 backdrop-blur-md md:p-8">
-            <h2 className="text-lg font-bold tracking-tight">Honest by design</h2>
-            <div className="mt-3 grid gap-4 text-[13px] leading-6 text-muted-foreground md:grid-cols-3">
+          <section className="glass mb-14 rounded-3xl border border-[color:var(--primary)]/25 bg-gradient-to-br from-[color:var(--primary)]/12 via-transparent to-[#ec4899]/8 p-7 md:p-9">
+            <h2 className="display text-lg font-bold tracking-tight">Honest by design</h2>
+            <div className="mt-4 grid gap-5 text-[13px] leading-6 text-muted-foreground md:grid-cols-3">
               <p><span className="font-semibold text-foreground">Scores are priorities,</span> not probabilities of crime. Country, channel, or amount alone never decide an alert.</p>
               <p><span className="font-semibold text-foreground">ML ranks unusualness.</span> A freshly trained isolation forest flags outliers — it does not confirm wrongdoing.</p>
               <p><span className="font-semibold text-foreground">Missing data is labelled.</span> Gaps, weak baselines, and currency-aware totals are shown — never hidden or silently filled.</p>
             </div>
-            <Link to="/dashboard" className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[color:var(--primary)] px-5 py-2.5 text-sm font-semibold text-white">
+            <Link to="/dashboard" className="grad-bg mt-6 inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-[0_12px_34px_-12px_rgba(236,72,153,0.8)]">
               Enter the workspace <ArrowRight className="h-4 w-4" />
             </Link>
           </section>

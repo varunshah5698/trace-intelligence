@@ -12,9 +12,10 @@ import { useReviewStore, type Review } from "@/lib/trace/reviews";
 import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  CheckCircle2, ChevronRight, Circle, Download, EyeOff, ListChecks,
-  Radar, RotateCcw, Scale, Search, ShieldCheck, TriangleAlert, X,
+  Ban, CheckCircle2, ChevronRight, Circle, Download, Eye, EyeOff, History,
+  ListChecks, Radar, RotateCcw, Scale, Search, ShieldCheck, TriangleAlert, X,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 /* One severity ladder for every signal surface on this page. */
 const SEV_HEX: Record<string, string> = {
@@ -736,28 +737,63 @@ function Workbench({ id }: { id: string }) {
                 <div key={k} className="flex justify-between gap-2 border-b border-border/50 pb-1.5"><dt className="text-muted-foreground">{k}</dt><dd className="truncate font-medium" title={x}>{x}</dd></div>
               ))}
             </dl>
-            {!store.shared && <p className="mt-2 text-xs text-[color:var(--warning)]">Backend unreachable — changes stay on this device until sync.</p>}
+            {!store.shared && (
+              <div className="mt-2.5 flex items-start gap-2 rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 px-2.5 py-2 text-[11px] leading-4">
+                <TriangleAlert className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--warning)]" />
+                <p className="flex-1 text-foreground/90">Backend unreachable — actions are saved on this device and sync automatically when the connection returns.</p>
+                <button onClick={() => window.location.reload()} className="shrink-0 rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:text-foreground">Retry</button>
+              </div>
+            )}
+            {/* semantic action grid — the current status lights up its own action */}
             <div className="mt-3 grid grid-cols-2 gap-1.5">
-              <button onClick={() => act("reviewed")} disabled={busy} className={`${btnGhost} disabled:opacity-50`}>{busy ? "Saving…" : "Mark Reviewed"}</button>
-              <button onClick={() => act("escalated")} disabled={busy} className={`${btnPrimary} disabled:opacity-50`}>{busy ? "Saving…" : "Escalate"}</button>
-              <button onClick={() => act("false-positive")} disabled={busy} className={`${btnGhost} disabled:opacity-50`}>Dismiss as False Positive</button>
-              <button onClick={() => act("reviewing")} disabled={busy} className={`${btnGhost} disabled:opacity-50`}>Keep Reviewing</button>
+              {([
+                ["reviewed", "Mark Reviewed", CheckCircle2],
+                ["escalated", "Escalate", TriangleAlert],
+                ["false-positive", "Dismiss False Positive", Ban],
+                ["reviewing", "Keep Reviewing", Eye],
+              ] as [Review, string, LucideIcon][]).map(([kind, label, Icon]) => {
+                const on = rv === kind;
+                const c = REV_COLOR[kind] ?? "var(--primary)";
+                const standing = kind === "escalated" ? btnPrimary : btnGhost;
+                return (
+                  <button
+                    key={kind}
+                    onClick={() => act(kind)}
+                    disabled={busy}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-[12.5px] font-medium transition-all disabled:opacity-50 ${on ? "" : standing}`}
+                    style={on ? {
+                      color: c,
+                      borderColor: `color-mix(in srgb, ${c} 45%, transparent)`,
+                      background: `color-mix(in srgb, ${c} 12%, transparent)`,
+                      boxShadow: `0 0 20px -8px ${c}`,
+                    } : undefined}
+                    title={on ? `This alert is already marked “${kind.replace("-", " ")}”` : `Mark as ${kind.replace("-", " ")}`}
+                  >
+                    <Icon className="h-3.5 w-3.5" /> {busy ? "Saving…" : label}
+                  </button>
+                );
+              })}
             </div>
             <div className="mt-2 flex gap-1.5">
               <button onClick={() => download(`${a.id}-evidence.csv`, toCSV(txns.map((t) => ({ id: t.id, sender: t.sender, receiver: t.receiver, amount: t.amount, currency: t.currency, ts: t.timestamp }))))} className={btnGhost + " flex-1"}><Download className="h-3.5 w-3.5" /> Export Case</button>
-              <Link to="/audit" className={btnGhost + " flex-1 justify-center"}>View Audit Trail</Link>
+              <Link to="/audit" className={btnGhost + " flex-1 justify-center"}><History className="h-3.5 w-3.5" /> Audit Trail</Link>
             </div>
           </Card>
           <Card className="p-4">
             <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Reviewer notes ({ns.length})</p>
             <div className="mt-2.5 space-y-2">
               {ns.map((n, i) => (
-                <div key={i} className="rounded-xl border border-border/60 bg-[color:var(--glass)] p-2.5 text-[13px] backdrop-blur-md">
+                <div key={i} className="relative rounded-xl border border-border/60 bg-[color:var(--glass)] p-3 pl-4 text-[13px] backdrop-blur-md">
+                  <span className="absolute bottom-3 left-0 top-3 w-0.5 rounded-full" style={{ background: "var(--primary)" }} aria-hidden />
                   <p className="leading-6">{n.text}</p>
-                  <p className="mono mt-1 text-[11px] text-muted-foreground">{n.actor ? `${n.actor} · ` : ""}{new Date(n.at).toLocaleString()}</p>
+                  <p className="mono mt-1.5 text-[11px] text-muted-foreground">{n.actor || "unknown"} · {new Date(n.at).toLocaleString()}</p>
                 </div>
               ))}
-              {ns.length === 0 && <p className="text-[13px] text-muted-foreground">No notes yet — record what you checked so the next reviewer doesn't repeat it.</p>}
+              {ns.length === 0 && (
+                <div className="rounded-xl border border-dashed border-border/70 px-3 py-5 text-center">
+                  <p className="text-[13px] text-muted-foreground">No notes yet — record what you checked so the next reviewer doesn't repeat it.</p>
+                </div>
+              )}
             </div>
             <div className="mt-3 flex gap-1.5">
               <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="Add a note…" className="flex-1 rounded-md border border-input bg-background px-2.5 py-1.5 text-[13px] outline-none transition-colors focus:border-[color:var(--ring)]/60" />

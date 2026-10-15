@@ -129,11 +129,11 @@ export default function Landing() {
 
       <header className="relative border-b border-border/70">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-3.5">
-          <div className="flex items-center gap-2.5">
-            <Logo size={32} />
-            <div>
-              <p className="text-[13px] font-bold tracking-tight">Aegis</p>
-              <p className="mono text-[10px] text-muted-foreground">connect the evidence</p>
+          <div className="flex items-center gap-3">
+            <Logo size={46} />
+            <div className="leading-tight">
+              <p className="text-[20px] font-extrabold tracking-tight">Aegis</p>
+              <p className="mono text-[11px] tracking-wide text-muted-foreground">connect the evidence</p>
             </div>
           </div>
           <nav className="flex items-center gap-2">

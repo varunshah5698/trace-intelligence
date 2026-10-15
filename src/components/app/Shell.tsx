@@ -124,12 +124,12 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
 
   const side = (
     <div className="flex h-full flex-col">
-      <Link to="/" className="flex items-center gap-2.5 px-4 pb-4 pt-4" title="Back to home">
-        <Logo size={32} className="shrink-0" />
+      <Link to="/" className="flex items-center gap-3 px-4 pb-5 pt-5" title="Back to home">
+        <Logo size={44} className="shrink-0" />
         {!collapsed && (
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-bold tracking-tight text-foreground">Aegis</p>
-            <p className="mono truncate text-[10px] text-muted-foreground">connect the evidence</p>
+          <div className="min-w-0 leading-tight">
+            <p className="truncate text-[19px] font-extrabold tracking-tight text-foreground">Aegis</p>
+            <p className="mono truncate text-[11px] tracking-wide text-muted-foreground">connect the evidence</p>
           </div>
         )}
       </Link>

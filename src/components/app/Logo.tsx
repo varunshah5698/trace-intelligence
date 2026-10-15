@@ -1,7 +1,7 @@
 /** Aegis brand mark: a shield (protection) wired as a transaction network. */
-export function Logo({ size = 32, className = "" }: { size?: number; className?: string }) {
+export function Logo({ size = 42, className = "" }: { size?: number; className?: string }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" className={className} role="img" aria-label="Aegis logo">
+    <svg width={size} height={size} viewBox="0 0 32 32" className={className} role="img" aria-label="Aegis logo" style={{ filter: "drop-shadow(0 2px 8px rgba(91,140,255,0.45))" }}>
       <defs>
         <linearGradient id="aegisGc" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0" stopColor="#5B8CFF" />

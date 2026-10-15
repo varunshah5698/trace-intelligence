@@ -30,13 +30,6 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
     ],
   },
   {
-    head: "Currency Intelligence",
-    items: [
-      { to: "/fx-market", label: "Live FX Market", icon: Landmark },
-      { to: "/fx-history", label: "FX History", icon: History },
-    ],
-  },
-  {
     head: "Data & Analytics",
     items: [
       { to: "/datasets", label: "Dataset Library", icon: Database },
@@ -61,9 +54,6 @@ const CRUMBS: Record<string, string[]> = {
   "/detections": ["Monitoring", "Detections"],
   "/network": ["Monitoring", "Entity Network"],
   "/fund-flows": ["Monitoring", "Fund Flows"],
-  "/flows": ["Monitoring", "Fund Flows"],
-  "/fx-market": ["Currency Intelligence", "Live FX Market"],
-  "/fx-history": ["Currency Intelligence", "FX History"],
   "/datasets": ["Data & Analytics", "Dataset Library"],
   "/rules": ["Data & Analytics", "Detection Rules"],
   "/models": ["Data & Analytics", "Models & Evaluation"],

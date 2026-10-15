@@ -111,8 +111,8 @@ const CAPS = [
   { icon: FileUp, t: "Any CSV, understood", d: "Unfamiliar columns, messy dates, mixed currencies — mapped with confidence scores, never silent guesses." },
   { icon: ShieldAlert, t: "Explainable detection", d: "Splitting, velocity, pass-through, cycles, plus a freshly trained isolation-forest model. Every alert cites transaction IDs." },
   { icon: Network, t: "Relationship graphs", d: "Cytoscape-powered tracing across accounts, hubs, and circular routes — no invented identities." },
-  { icon: Landmark, t: "Real FX intelligence", d: "Live provider quotes and ECB reference history with honest freshness states. Never fabricated ticks." },
-  { icon: FlaskConical, t: "Synthetic studio", d: "Seeded ledgers with planted scenarios and isolated ground truth for safe evaluation." },
+  { icon: Landmark, t: "Corridor analysis", d: "Domestic versus cross-border flows, intermediary chains, and counterparty context — a country alone never decides an alert." },
+  { icon: FlaskConical, t: "Labelled demo data", d: "Seeded ledgers with planted scenarios and isolated ground truth for safe evaluation." },
   { icon: BellRing, t: "Review workflow", d: "Cases, notes, audit trail, and notifications that say plainly what is — and isn't — model-confirmed." },
 ];
 
@@ -168,8 +168,8 @@ export default function Landing() {
               initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.16, ease: EASE }}
               className="mt-5 max-w-lg text-[15px] leading-7 text-muted-foreground"
             >
-              Aegis analyses Indian domestic transfers and international payments, watches live FX,
-              and turns any messy CSV into explainable, review-ready alerts — with honesty about
+              Aegis analyses Indian domestic transfers and international payments,
+              turning any messy CSV into explainable, review-ready alerts — with honesty about
               what the machine confirms and what it does not.
             </motion.p>
             <motion.div
@@ -191,9 +191,9 @@ export default function Landing() {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.8 }}
               className="tnum mt-8 flex gap-8 text-sm"
             >
-              <div><p className="text-2xl font-extrabold"><Counter to={8} /></p><p className="text-xs text-muted-foreground">detection rules</p></div>
-              <div><p className="text-2xl font-extrabold"><Counter to={150} suffix="+" /></p><p className="text-xs text-muted-foreground">ML trees trained</p></div>
-              <div><p className="text-2xl font-extrabold"><Counter to={12} /></p><p className="text-xs text-muted-foreground">FX pairs tracked</p></div>
+              <div><p className="text-2xl font-extrabold"><Counter to={9} /></p><p className="text-xs text-muted-foreground">detection rules</p></div>
+              <div><p className="text-2xl font-extrabold"><Counter to={300} suffix="+" /></p><p className="text-xs text-muted-foreground">ML trees trained</p></div>
+              <div><p className="text-2xl font-extrabold"><Counter to={100} suffix="%" /></p><p className="text-xs text-muted-foreground">alerts with cited evidence</p></div>
             </motion.div>
           </div>
           <Tilt>
@@ -255,7 +255,7 @@ export default function Landing() {
             <div className="mt-3 grid gap-4 text-[13px] leading-6 text-muted-foreground md:grid-cols-3">
               <p><span className="font-semibold text-foreground">Scores are priorities,</span> not probabilities of crime. Country, channel, or amount alone never decide an alert.</p>
               <p><span className="font-semibold text-foreground">ML ranks unusualness.</span> A freshly trained isolation forest flags outliers — it does not confirm wrongdoing.</p>
-              <p><span className="font-semibold text-foreground">FX states are labelled.</span> Live, delayed, cached, reference, or unavailable — never invented ticks.</p>
+              <p><span className="font-semibold text-foreground">Missing data is labelled.</span> Gaps, weak baselines, and currency-aware totals are shown — never hidden or silently filled.</p>
             </div>
             <Link to="/dashboard" className="mt-5 inline-flex items-center gap-2 rounded-lg bg-[color:var(--primary)] px-5 py-2.5 text-sm font-semibold text-white">
               Enter the workspace <ArrowRight className="h-4 w-4" />

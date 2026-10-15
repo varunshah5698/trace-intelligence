@@ -1,10 +1,13 @@
-import { motion, useInView, useMotionValue, useSpring, useTransform } from "framer-motion";
-import { ArrowRight, BellRing, FileUp, FlaskConical, Landmark, Network, ShieldAlert, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { motion } from "framer-motion";
+import { ArrowRight, BellRing, FileUp, FlaskConical, Landmark, Network, ShieldAlert } from "lucide-react";
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Logo } from "@/components/app/Logo";
 
 const EASE = [0.22, 1, 0.36, 1] as const;
+
+const HERO_VIDEO =
+  "https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260912_104036_bd6924f6-3c8e-417e-8465-6d03c8c2e9e6.mp4";
 
 function Rise({ children, delay = 0, className = "" }: { children: ReactNode; delay?: number; className?: string }) {
   return (
@@ -14,93 +17,6 @@ function Rise({ children, delay = 0, className = "" }: { children: ReactNode; de
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.7, delay, ease: EASE }}
       className={className}
-    >
-      {children}
-    </motion.div>
-  );
-}
-
-function Counter({ to, suffix = "" }: { to: number; suffix?: string }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const inView = useInView(ref, { once: true, margin: "-40px" });
-  const [n, setN] = useState(0);
-  useEffect(() => {
-    if (!inView) return;
-    const t0 = performance.now();
-    const dur = 1400;
-    let raf = 0;
-    const step = (t: number) => {
-      const p = Math.min(1, (t - t0) / dur);
-      setN(Math.round(to * (1 - Math.pow(1 - p, 3))));
-      if (p < 1) raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return () => cancelAnimationFrame(raf);
-  }, [inView, to]);
-  return (
-    <span ref={ref} className="tnum">
-      {n.toLocaleString("en-IN")}
-      {suffix}
-    </span>
-  );
-}
-
-/** Animated transaction network: pulsing nodes, flowing dashed edges. */
-function NetworkArt() {
-  const nodes = [
-    { x: 60, y: 70, r: 7 }, { x: 150, y: 40, r: 5 }, { x: 240, y: 80, r: 9 },
-    { x: 120, y: 140, r: 6 }, { x: 220, y: 160, r: 5 }, { x: 300, y: 120, r: 7 },
-  ];
-  const edges = [[0, 1], [1, 2], [0, 3], [3, 4], [4, 2], [2, 5], [3, 1]];
-  return (
-    <svg viewBox="0 0 360 200" className="h-full w-full" role="img" aria-label="Animated transaction network">
-      {edges.map(([a, b], i) => (
-        <motion.line
-          key={i}
-          x1={nodes[a].x} y1={nodes[a].y} x2={nodes[b].x} y2={nodes[b].y}
-          stroke={i === 4 ? "#F4B544" : "#5B8CFF"}
-          strokeWidth={i === 4 ? 2 : 1.2}
-          strokeDasharray="5 5"
-          opacity={0.65}
-          initial={{ strokeDashoffset: 0 }}
-          animate={{ strokeDashoffset: -40 }}
-          transition={{ duration: 2.4, repeat: Infinity, ease: "linear", delay: i * 0.2 }}
-        />
-      ))}
-      {nodes.map((nd, i) => (
-        <g key={i}>
-          <motion.circle
-            cx={nd.x} cy={nd.y} r={nd.r + 7}
-            fill="none" stroke={i === 2 ? "#F4B544" : "#26C6B8"} strokeWidth={1} opacity={0.4}
-            initial={{ scale: 0.7, opacity: 0 }}
-            animate={{ scale: [0.7, 1.15, 0.7], opacity: [0, 0.5, 0] }}
-            transition={{ duration: 3, repeat: Infinity, delay: i * 0.45 }}
-            style={{ transformOrigin: `${nd.x}px ${nd.y}px` }}
-          />
-          <circle cx={nd.x} cy={nd.y} r={nd.r} fill={i === 2 ? "#F4B544" : "#0D1420"} stroke={i === 2 ? "#F4B544" : "#5B8CFF"} strokeWidth={1.5} />
-        </g>
-      ))}
-    </svg>
-  );
-}
-
-function Tilt({ children }: { children: ReactNode }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const mx = useMotionValue(0.5);
-  const my = useMotionValue(0.5);
-  const rx = useSpring(useTransform(my, [0, 1], [5, -5]), { stiffness: 200, damping: 22 });
-  const ry = useSpring(useTransform(mx, [0, 1], [-5, 5]), { stiffness: 200, damping: 22 });
-  return (
-    <motion.div
-      ref={ref}
-      style={{ rotateX: rx, rotateY: ry, transformPerspective: 900 }}
-      onMouseMove={(e) => {
-        const r = ref.current?.getBoundingClientRect();
-        if (!r) return;
-        mx.set((e.clientX - r.left) / r.width);
-        my.set((e.clientY - r.top) / r.height);
-      }}
-      onMouseLeave={() => { mx.set(0.5); my.set(0.5); }}
     >
       {children}
     </motion.div>
@@ -146,18 +62,24 @@ export default function Landing() {
       </header>
 
       <main className="relative mx-auto max-w-6xl px-5">
-        {/* hero */}
-        <section className="grid items-center gap-10 py-14 md:py-20 lg:grid-cols-2">
-          <div>
-            <motion.p
-              initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.55, ease: EASE }}
-              className="inline-flex items-center gap-1.5 rounded-full border border-border bg-card px-3 py-1.5 font-mono text-[11px] text-muted-foreground"
-            >
-              <Sparkles className="h-3 w-3 text-[color:var(--teal)]" /> rules + trained ML + graph evidence
-            </motion.p>
+        {/* hero with video background */}
+        <section className="relative -mx-5 overflow-hidden" aria-label="Aegis introduction">
+          <video
+            className="absolute inset-0 h-full w-full object-cover"
+            src={HERO_VIDEO}
+            autoPlay
+            muted
+            loop
+            playsInline
+            preload="metadata"
+            aria-hidden
+          />
+          <div className="absolute inset-0 bg-background/70" aria-hidden />
+          <div className="absolute inset-0 bg-gradient-to-b from-background/70 via-transparent to-background" aria-hidden />
+          <div className="relative mx-auto max-w-3xl px-5 py-24 text-center md:py-36">
             <motion.h1
               initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.08, ease: EASE }}
-              className="mt-5 text-4xl font-extrabold leading-[1.06] tracking-tight md:text-[3.4rem]"
+              className="text-4xl font-extrabold leading-[1.06] tracking-tight md:text-[3.4rem]"
             >
               Every transaction tells a story.{" "}
               <span className="bg-gradient-to-r from-[color:var(--primary)] to-[color:var(--teal)] bg-clip-text text-transparent">
@@ -166,7 +88,7 @@ export default function Landing() {
             </motion.h1>
             <motion.p
               initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.16, ease: EASE }}
-              className="mt-5 max-w-lg text-[15px] leading-7 text-muted-foreground"
+              className="mx-auto mt-5 max-w-xl text-[15px] leading-7 text-muted-foreground"
             >
               Aegis analyses Indian domestic transfers and international payments,
               turning any messy CSV into explainable, review-ready alerts — with honesty about
@@ -174,7 +96,7 @@ export default function Landing() {
             </motion.p>
             <motion.div
               initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.24, ease: EASE }}
-              className="mt-7 flex flex-wrap gap-3"
+              className="mt-7 flex flex-wrap justify-center gap-3"
             >
               <motion.span whileHover={{ scale: 1.04 }} whileTap={{ scale: 0.96 }}>
                 <Link to="/dashboard" className="inline-flex items-center gap-2 rounded-lg bg-[color:var(--primary)] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-[color:var(--primary)]/25">
@@ -187,49 +109,8 @@ export default function Landing() {
                 </Link>
               </motion.span>
             </motion.div>
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5, duration: 0.8 }}
-              className="tnum mt-8 flex gap-8 text-sm"
-            >
-              <div><p className="text-2xl font-extrabold"><Counter to={9} /></p><p className="text-xs text-muted-foreground">detection rules</p></div>
-              <div><p className="text-2xl font-extrabold"><Counter to={300} suffix="+" /></p><p className="text-xs text-muted-foreground">ML trees trained</p></div>
-              <div><p className="text-2xl font-extrabold"><Counter to={100} suffix="%" /></p><p className="text-xs text-muted-foreground">alerts with cited evidence</p></div>
-            </motion.div>
           </div>
-          <Tilt>
-            <motion.div
-              initial={{ opacity: 0, scale: 0.94 }} animate={{ opacity: 1, scale: 1 }} transition={{ duration: 0.9, delay: 0.2, ease: EASE }}
-              className="rounded-xl border border-border bg-card/80 p-4 shadow-2xl backdrop-blur"
-            >
-              <div className="flex items-center justify-between px-1 pb-2">
-                <p className="mono text-[11px] text-muted-foreground">live trace · entity network</p>
-                <p className="mono flex items-center gap-1.5 text-[11px] text-[color:var(--success)]"><span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[color:var(--success)]" /> streaming</p>
-              </div>
-              <div className="h-56"><NetworkArt /></div>
-              <div className="tnum mt-2 grid grid-cols-3 gap-2 text-center">
-                {[["2.4k", "transfers"], ["37", "entities"], ["6", "review signals"]].map(([a, b]) => (
-                  <div key={b} className="rounded-md border border-border bg-background px-2 py-2">
-                    <p className="text-sm font-bold">{a}</p><p className="text-[10px] text-muted-foreground">{b}</p>
-                  </div>
-                ))}
-              </div>
-            </motion.div>
-          </Tilt>
         </section>
-
-        {/* marquee */}
-        <div className="overflow-hidden border-y border-border/70 py-3" aria-hidden>
-          <motion.div
-            className="mono flex w-max gap-10 text-xs text-muted-foreground"
-            animate={{ x: ["0%", "-50%"] }} transition={{ duration: 26, repeat: Infinity, ease: "linear" }}
-          >
-            {Array.from({ length: 2 }).flatMap((_, k) =>
-              ["splitting detection", "isolation-forest anomalies", "pass-through tracing", "circular routes", "fan-in / fan-out", "corridor analysis", "evidence packs", "audit trail"].map((t) => (
-                <span key={k + t} className="flex items-center gap-10"><span>{t}</span><span className="text-[color:var(--teal)]">◆</span></span>
-              )),
-            )}
-          </motion.div>
-        </div>
 
         {/* capabilities */}
         <section className="py-14">

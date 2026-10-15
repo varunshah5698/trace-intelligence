@@ -18,7 +18,6 @@ const Landing = lazy(() => import("./pages/Landing.tsx"));
 const Overview = lazy(() => import("./pages/app/Overview.tsx"));
 const Datasets = lazy(() => import("./pages/app/Datasets.tsx"));
 const DatasetDetail = lazy(() => import("./pages/app/DatasetDetail.tsx"));
-const Studio = lazy(() => import("./pages/app/Studio.tsx"));
 const Detections = lazy(() => import("./pages/app/Detections.tsx"));
 const Domestic = lazy(() => import("./pages/app/Domestic.tsx"));
 const International = lazy(() => import("./pages/app/International.tsx"));
@@ -127,8 +126,6 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/datasets" element={<App title="Dataset Library" sub="Open, profile, analyse, compare, download, delete."><Datasets /></App>} />
                   <Route path="/datasets/new" element={<App title="Upload CSV" sub="Six steps from file to findings."><Datasets /></App>} />
                   <Route path="/datasets/:id" element={<App title="Dataset Detail" sub="Quality, rows, manifest, exports."><DatasetDetail /></App>} />
-                  <Route path="/studio" element={<App title="AI Data Studio" sub="Deterministic scenario generation with ground-truth manifests."><Studio /></App>} />
-                  <Route path="/demo" element={<App title="Demo" sub="Synthetic-data demonstration, explicitly labelled."><Studio /></App>} />
                   <Route path="/monitoring" element={<App title="Transaction Monitoring" sub="Run jobs, review results."><Transactions /></App>} />
                   <Route path="/rules" element={<Navigate to="/models" replace />} />
                   <Route path="/models" element={<Navigate to="/reports" replace />} />

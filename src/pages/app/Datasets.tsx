@@ -112,7 +112,6 @@ export default function Datasets() {
       <UploadCard onDone={(w) => setWizard(w)} />
       <div className="flex flex-wrap items-center gap-2 text-[13px]">
         <button onClick={loadDemo} className={btnGhost}>Use generated sample</button>
-        <Link to="/studio" className="px-1 text-[color:var(--primary)] hover:underline">or open AI Data Studio →</Link>
       </div>
       <Card>
         <PanelTitle title={`Dataset Library (${list.length})`} sub="Ownership is per-browser in this build; deletion is permanent." />

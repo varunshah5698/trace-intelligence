@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import {
   ArrowLeftRight, Bell, BookOpenCheck, Briefcase, Database, FileUp,
-  FlaskConical, History, Landmark, LayoutDashboard, LogOut, Menu,
+  History, Landmark, LayoutDashboard, LogOut, Menu,
   Moon, House, Network, Search, Settings, ShieldAlert, Sun, Users, Waypoints, WifiOff, X,
 } from "lucide-react";
 import { useQuery } from "convex/react";
@@ -42,7 +42,6 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
     items: [
       { to: "/datasets", label: "Dataset Library", icon: Database },
       { to: "/datasets/new", label: "Upload CSV", icon: FileUp },
-      { to: "/studio", label: "AI Data Studio", icon: FlaskConical },
       { to: "/reports", label: "Reports", icon: BookOpenCheck },
     ],
   },
@@ -70,7 +69,6 @@ const CRUMBS: Record<string, string[]> = {
   "/fx-history": ["Currency Intelligence", "FX History"],
   "/datasets": ["Data & Analytics", "Dataset Library"],
   "/datasets/new": ["Data & Analytics", "Upload CSV"],
-  "/studio": ["Data & Analytics", "AI Data Studio"],
   "/rules": ["Data & Analytics", "Detection Rules"],
   "/models": ["Data & Analytics", "Models & Evaluation"],
   "/evaluation": ["Data & Analytics", "Models & Evaluation"],

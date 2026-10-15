@@ -46,15 +46,14 @@ export default function Landing() {
         preload="metadata"
         aria-hidden
       />
-      <div className="pointer-events-none fixed inset-0 bg-black/55" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/20 via-black/45 to-black/85" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-tr from-black/40 via-transparent to-black/30" aria-hidden />
-      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-transparent via-transparent to-[#04060b]" aria-hidden />
-      {/* ambient glow */}
+      <div className="pointer-events-none fixed inset-0 bg-black/35" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-gradient-to-b from-black/70 via-transparent to-[#04060b]" aria-hidden />
+      <div className="pointer-events-none fixed inset-0 bg-[radial-gradient(125%_95%_at_50%_42%,transparent_0%,rgba(4,6,11,0.72)_100%)]" aria-hidden />
+      {/* ambient glow — violet to echo the globe in the video */}
       <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
-        <motion.div className="absolute -top-40 left-1/4 h-[28rem] w-[28rem] rounded-full bg-[color:var(--primary)]/15 blur-[130px]"
+        <motion.div className="absolute -top-40 left-1/4 h-[28rem] w-[28rem] rounded-full bg-[#7c5cff]/20 blur-[130px]"
           animate={{ x: [0, 60, 0], y: [0, 30, 0] }} transition={{ duration: 14, repeat: Infinity, ease: "easeInOut" }} />
-        <motion.div className="absolute right-[8%] top-1/3 h-[22rem] w-[22rem] rounded-full bg-[color:var(--teal)]/10 blur-[120px]"
+        <motion.div className="absolute right-[8%] top-1/3 h-[22rem] w-[22rem] rounded-full bg-[color:var(--primary)]/14 blur-[120px]"
           animate={{ x: [0, -50, 0], y: [0, 40, 0] }} transition={{ duration: 17, repeat: Infinity, ease: "easeInOut" }} />
       </div>
 
@@ -79,13 +78,13 @@ export default function Landing() {
       <main className="relative mx-auto max-w-6xl px-5">
         {/* hero with video background */}
         <section className="relative" aria-label="Aegis introduction">
-          <div className="relative mx-auto max-w-3xl px-5 py-24 text-center md:py-36">
+          <div className="relative mx-auto max-w-3xl px-5 py-32 text-center md:py-48">
             <motion.h1
               initial={{ opacity: 0, y: 26 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.08, ease: EASE }}
               className="text-4xl font-extrabold leading-[1.06] tracking-tight md:text-[3.4rem]"
             >
               Every transaction tells a story.{" "}
-              <span className="bg-gradient-to-r from-[color:var(--primary)] to-[color:var(--teal)] bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-[#b39bff] to-[color:var(--primary)] bg-clip-text text-transparent">
                 Connect the evidence.
               </span>
             </motion.h1>

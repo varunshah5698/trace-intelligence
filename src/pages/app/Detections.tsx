@@ -1,4 +1,4 @@
-import { Card, Empty, PanelTitle, RiskCharacter, SevBadge, btnGhost, btnPrimary, emit, fmtAxis, num, shortId } from "@/components/app/Shell";
+import { Card, Empty, PanelTitle, RiskCharacter, SevBadge, btnGhost, btnPrimary, emit, num, shortId } from "@/components/app/Shell";
 import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV, type NormalizedTxn } from "@/lib/trace/csv";
 import { DEFAULT_RULES, runDetection, verifyAlerts, type Alert } from "@/lib/trace/detect";
@@ -12,10 +12,9 @@ import { useReviewStore, type Review } from "@/lib/trace/reviews";
 import { toast } from "sonner";
 import { motion, useReducedMotion } from "framer-motion";
 import {
-  CheckCircle2, ChevronRight, ClipboardList, Download,
-  Radar, Route as RouteIcon, Scale, Search, TriangleAlert, X, XCircle,
+  CheckCircle2, ChevronRight, Circle, Download, EyeOff, ListChecks,
+  Radar, RotateCcw, Scale, Search, ShieldCheck, TriangleAlert, X,
 } from "lucide-react";
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 /* One severity ladder for every signal surface on this page. */
 const SEV_HEX: Record<string, string> = {
@@ -143,6 +142,8 @@ function Explorer() {
     { k: "Closed Out", n: count((a) => ["false-positive", "escalated", "reviewed"].includes(rv[a.id] ?? "")), active: ["false-positive", "escalated", "reviewed"].includes(rev), accent: "var(--success)", onClick: () => setRev(rev ? "" : "reviewed") },
   ];
   const filtersActive = Boolean(sev || cat || scope || rev || method || hi || qs);
+  const triaged = count((a) => (rv[a.id] ?? "new") !== "new");
+  const triagePct = shown.alerts.length ? Math.round((triaged / shown.alerts.length) * 100) : 0;
 
   function rerun() {
     const allx = loadAll();
@@ -166,6 +167,17 @@ function Explorer() {
             <span className={`absolute right-3 top-3 h-2 w-2 rounded-full transition-all ${s.active ? "shadow-[0_0_10px_currentColor]" : "bg-muted"}`} style={s.active ? { background: s.accent, color: s.accent } : undefined} aria-hidden />
           </button>
         ))}
+      </div>
+
+      {/* ── Triage queue progress ── */}
+      <div className="glass rise flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl px-4 py-2.5">
+        <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Triage queue</p>
+        <span className="relative h-1.5 min-w-32 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+          <span className="absolute inset-y-0 left-0 rounded-full transition-all duration-700" style={{ width: `${triagePct}%`, background: "linear-gradient(90deg, #2dd4bf, #60a5fa)" }} />
+        </span>
+        <p className="text-[11px] text-muted-foreground">
+          <span className="tnum font-semibold text-foreground">{triaged}</span> / {shown.alerts.length} triaged · <span className="tnum font-semibold text-foreground">{triagePct}%</span>
+        </p>
       </div>
 
       {/* ── Filter bar ── */}
@@ -304,26 +316,214 @@ function Drawer({ a, dsName, rv, onClose }: { a: Alert; dsName: string; rv: stri
   );
 }
 
-/* ── Machine confirmation ───────────────────────────────────────────────── */
+/* ── Signal integrity ───────────────────────────────────────────────────── */
 
-function VerifyPanel({ a }: { a: Alert }) {
-  const v = verifyAlerts([a], readModelMeta())[0];
+/** Rules/model provenance for one alert. Reframes the "model scored this"
+ *  check as not-applicable for rule-based signals (neutral, not a red cross)
+ *  and shows an overall integrity meter over the applicable checks. */
+function IntegrityPanel({ a }: { a: Alert }) {
+  const model = readModelMeta();
+  const v = verifyAlerts([a], model)[0];
+  // Model check is only meaningful when the model exists and the signal is model-based.
+  const modelNa = !v.confirmedByModel && model !== null;
+  const applicable = v.checks.filter((_, i) => !(i === 0 && modelNa));
+  const passedN = applicable.filter((c) => c.passed).length;
+  const kind = v.confirmedByModel
+    ? { label: "model-scored signal", color: "var(--success)" }
+    : v.rulesOnly
+      ? { label: "deterministic rule match", color: "#60A5FA" }
+      : { label: "model signal — unconfirmed", color: "var(--warning)" };
   return (
     <div className="rounded-xl border border-border/70 bg-[color:var(--glass)] p-4 text-[13px] backdrop-blur-md">
-      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-        Machine confirmation — <span className={v.confirmedByModel ? "text-[color:var(--success)]" : "text-foreground"}>{v.confirmedByModel ? "scored by model" : "not confirmed by model"}</span>
-      </p>
-      <ul className="mt-2.5 space-y-1.5">
-        {v.checks.map((c, i) => (
-          <li key={i} className="flex items-center gap-2">
-            {c.passed
-              ? <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[color:var(--success)]" />
-              : <XCircle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/60" />}
-            <span className={c.passed ? "" : "text-muted-foreground"}>{c.label}</span>
-          </li>
-        ))}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+          <ShieldCheck className="h-3.5 w-3.5" /> Signal integrity
+        </p>
+        <span
+          className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+          style={{ color: kind.color, borderColor: `color-mix(in srgb, ${kind.color} 35%, transparent)`, background: `color-mix(in srgb, ${kind.color} 10%, transparent)` }}
+        >
+          <span className="h-1.5 w-1.5 rounded-full bg-current" aria-hidden />
+          {kind.label}
+        </span>
+      </div>
+      <div className="mt-3 flex items-center gap-2">
+        <span className="flex flex-1 gap-1" aria-hidden>
+          {applicable.map((c, i) => (
+            <span key={i} className="h-1.5 flex-1 rounded-full" style={{ background: c.passed ? "var(--success)" : "color-mix(in srgb, var(--warning) 55%, transparent)" }} />
+          ))}
+        </span>
+        <span className="tnum text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">{passedN}</span>/{applicable.length} checks</span>
+      </div>
+      <ul className="mt-3 space-y-1.5">
+        {v.checks.map((c, i) => {
+          const na = i === 0 && modelNa;
+          return (
+            <li key={i} className="flex items-center gap-2">
+              {c.passed ? (
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[color:var(--success)]" />
+              ) : na ? (
+                <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground/50" />
+              ) : (
+                <TriangleAlert className="h-3.5 w-3.5 shrink-0 text-[color:var(--warning)]" />
+              )}
+              <span className={c.passed ? "" : na ? "text-muted-foreground" : "text-foreground/90"}>
+                {na ? "Model confirmation not applicable — deterministic rule signal" : c.label}
+              </span>
+            </li>
+          );
+        })}
       </ul>
-      {v.rulesOnly && <p className="mt-2.5 border-t border-border/60 pt-2 text-xs text-muted-foreground">Rules-only signal: a deterministic pattern match, never presented as a model verdict.</p>}
+      {v.rulesOnly && !v.confirmedByModel && (
+        <p className="mt-3 border-t border-border/60 pt-2.5 text-xs leading-5 text-muted-foreground">
+          This alert is a deterministic pattern match. The isolation forest may still rank the implicated transfers as unusual — the model never vetoes or endorses a rule signal.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/* ── Follow-the-money trail ─────────────────────────────────────────────── */
+
+/** Ordered transfer trail: one glowing node per implicated transfer, bar length ∝ amount. */
+function MoneyTrail({ txns, hex }: { txns: NormalizedTxn[]; hex: string }) {
+  const reduce = useReducedMotion();
+  const sorted = [...txns].sort((a, b) => a.epoch - b.epoch);
+  const maxAmt = Math.max(1, ...sorted.map((t) => t.amount));
+  return (
+    <div className="relative space-y-2 pl-5">
+      <span className="absolute bottom-3 left-[7px] top-3 w-px" style={{ background: `linear-gradient(180deg, ${hex}, transparent)` }} aria-hidden />
+      {sorted.map((t, i) => (
+        <motion.div
+          key={t.id} className="relative"
+          initial={reduce ? false : { opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+          transition={{ delay: 0.07 * i, duration: 0.4, ease: "easeOut" }}
+        >
+          <span className="absolute -left-[18px] top-3.5 h-2.5 w-2.5 rounded-full" style={{ background: hex, boxShadow: `0 0 10px ${hex}` }} aria-hidden />
+          <div className="rounded-xl border border-border/60 bg-[color:var(--glass)] px-3 py-2 backdrop-blur-md">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+              <span className="mono min-w-0 truncate text-[12px]" title={`${t.sender} → ${t.receiver}`}>
+                {shortId(t.sender)} <span className="text-muted-foreground">→</span> {shortId(t.receiver)}
+              </span>
+              <span className="tnum whitespace-nowrap text-[12px] font-semibold">
+                {t.amount.toLocaleString("en-IN")} <span className="text-[10px] font-normal text-muted-foreground">{t.currency}</span>
+              </span>
+            </div>
+            <div className="mt-1.5 flex items-center gap-2">
+              <span className="relative block h-1.5 flex-1 overflow-hidden rounded-full bg-muted" aria-hidden>
+                <span className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${(t.amount / maxAmt) * 100}%`, background: `linear-gradient(90deg, ${hex}, color-mix(in srgb, ${hex} 35%, transparent))` }} />
+              </span>
+              <span className="tnum whitespace-nowrap text-[10px] text-muted-foreground">
+                {t.timestamp.slice(5, 16).replace("T", " ")} · {t.origin_country}→{t.dest_country}
+              </span>
+            </div>
+          </div>
+        </motion.div>
+      ))}
+      {sorted.length === 0 && <p className="py-4 text-center text-[13px] text-muted-foreground">No linked transfers survived dataset cleanup.</p>}
+    </div>
+  );
+}
+
+/** Where the flagged amounts sit inside this dataset — descriptive percentiles, never probabilities. */
+function AmountContext({ txns, all, hex }: { txns: NormalizedTxn[]; all: NormalizedTxn[]; hex: string }) {
+  const pool = new Map<string, number[]>();
+  for (const t of all) {
+    const arr = pool.get(t.currency);
+    if (arr) arr.push(t.amount); else pool.set(t.currency, [t.amount]);
+  }
+  const byCcy = new Map<string, { pcts: number[]; poolN: number }>();
+  for (const t of txns.slice(0, 30)) {
+    const arr = pool.get(t.currency) ?? [];
+    const pct = arr.length ? Math.round((arr.filter((x) => x <= t.amount).length / arr.length) * 100) : 0;
+    const e = byCcy.get(t.currency) ?? { pcts: [] as number[], poolN: arr.length };
+    e.pcts.push(pct); byCcy.set(t.currency, e);
+  }
+  const rows = [...byCcy.entries()].slice(0, 3);
+  if (rows.length === 0) return null;
+  return (
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Amount context — percentile inside this dataset</p>
+      <div className="mt-2.5 space-y-3">
+        {rows.map(([ccy, { pcts, poolN }]) => {
+          const maxP = Math.max(...pcts);
+          return (
+            <div key={ccy}>
+              <div className="flex items-baseline justify-between gap-2">
+                <p className="text-[11px] text-muted-foreground"><span className="mono font-semibold text-foreground">{ccy}</span> · {num(poolN)} transfers in pool</p>
+                <p className="tnum text-[11px] text-muted-foreground">up to <span className="font-semibold text-foreground">P{maxP}</span></p>
+              </div>
+              <div className="relative mt-1.5 h-2 rounded-full" style={{ background: "linear-gradient(90deg, rgba(45,212,191,0.22), rgba(96,165,250,0.22), rgba(251,191,36,0.26), rgba(251,113,133,0.3))" }}>
+                {pcts.slice(0, 6).map((p, i) => (
+                  <span
+                    key={i}
+                    className="absolute top-1/2 h-3 w-3 -translate-x-1/2 -translate-y-1/2 rounded-full"
+                    style={{ left: `${Math.min(98, Math.max(2, p))}%`, background: hex, boxShadow: `0 0 8px ${hex}` }}
+                    title={`Flagged amount at P${p}`}
+                    aria-hidden
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <p className="mt-2.5 text-[11px] leading-5 text-muted-foreground">Descriptive context only — a high percentile means the amount is large relative to this file, not that it is suspicious.</p>
+    </div>
+  );
+}
+
+/* ── Analyst checklist ──────────────────────────────────────────────────── */
+
+/** Interactive checklist over the rule's suggested next checks — ticks persist per alert on this device. */
+function ChecklistCard({ a }: { a: Alert }) {
+  const key = `trace.v1.checklist.${a.id}`;
+  const [done, setDone] = useState<Record<string, boolean>>(() => {
+    try { return JSON.parse(localStorage.getItem(key) ?? "{}"); } catch { return {}; }
+  });
+  const doneN = a.checks.filter((_, i) => done[i]).length;
+  function toggle(i: number) {
+    setDone((prev) => {
+      const next = { ...prev, [i]: !prev[i] };
+      try { localStorage.setItem(key, JSON.stringify(next)); } catch { /* quota — session only */ }
+      return next;
+    });
+  }
+  function reset() {
+    setDone({});
+    try { localStorage.removeItem(key); } catch { /* ignore */ }
+  }
+  return (
+    <div className="rounded-xl border border-border/70 bg-[color:var(--glass)] p-4 text-[13px] backdrop-blur-md">
+      <div className="flex items-center justify-between gap-2">
+        <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"><ListChecks className="h-3.5 w-3.5" /> Analyst checklist</p>
+        <span className="tnum text-[11px] text-muted-foreground"><span className="font-semibold text-foreground">{doneN}</span>/{a.checks.length} done</span>
+      </div>
+      <ul className="mt-2.5 space-y-0.5">
+        {a.checks.map((c, i) => {
+          const ok = !!done[i];
+          return (
+            <li key={i}>
+              <button onClick={() => toggle(i)} aria-pressed={ok} className="flex w-full items-start gap-2.5 rounded-lg px-1.5 py-1.5 text-left transition-colors hover:bg-[color:var(--glass-hi)]">
+                <span
+                  className={`mt-px flex h-4 w-4 shrink-0 items-center justify-center rounded-md border transition-all ${ok ? "border-transparent" : "border-border"}`}
+                  style={ok ? { background: "var(--success)" } : undefined}
+                  aria-hidden
+                >
+                  {ok && <CheckCircle2 className="h-3 w-3" style={{ color: "var(--background)" }} />}
+                </span>
+                <span className={`leading-5 transition-all ${ok ? "text-muted-foreground line-through" : "text-foreground/90"}`}>{c}</span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      {doneN > 0 && (
+        <button onClick={reset} className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-muted-foreground transition-colors hover:text-foreground">
+          <RotateCcw className="h-3 w-3" /> Reset ticks
+        </button>
+      )}
+      <p className="mt-2 border-t border-border/60 pt-2 text-[11px] leading-5 text-muted-foreground">Ticks save on this device per alert — the next reviewer sees where you stopped.</p>
     </div>
   );
 }
@@ -354,16 +554,6 @@ function Workbench({ id }: { id: string }) {
   const txns = a.txnIds.map((t) => d.txns.find((x) => x.id === t)).filter((t): t is NormalizedTxn => t !== undefined);
   const hex = sevHex(a.severity);
 
-  // Graphical analysis inputs: value over the evidence window + route chains.
-  // Small per-alert data (tens of transfers), so computed inline each render.
-  const series = txns.map((t) => ({ time: t.epoch, amt: t.amount, id: t.id })).sort((x, y) => x.time - y.time);
-  const chainMap = new Map<string, { from: string; to: string; n: number; v: number; cur: string }>();
-  for (const t of txns) {
-    const k = `${t.sender}→${t.receiver}`;
-    const e = chainMap.get(k) ?? { from: t.sender, to: t.receiver, n: 0, v: 0, cur: t.currency };
-    e.n++; e.v += t.amount; chainMap.set(k, e);
-  }
-  const chains = [...chainMap.values()].sort((x, y) => y.n - x.n).slice(0, 4);
   const winDates = txns.map((t) => t.timestamp.slice(0, 10)).sort();
   const window_ = winDates.length ? `${winDates[0]} → ${winDates[winDates.length - 1]}` : "—";
 
@@ -463,52 +653,15 @@ function Workbench({ id }: { id: string }) {
             <p className="px-4 pt-2 text-[13px] leading-6 text-muted-foreground">{a.explanation}</p>
           </Card>
 
-          {/* graphical analysis */}
+          {/* graphical analysis — follow-the-money trail + amount context */}
           <Card className="p-5">
-            <PanelTitle title="Graphical analysis" sub="Transfer value across the evidence window · route chains below" />
-            <div className="mt-3 h-44 px-2">
-              <ResponsiveContainer>
-                <AreaChart data={series} margin={{ top: 6, right: 12, bottom: 0, left: 0 }}>
-                  <defs>
-                    <linearGradient id={`wb-${a.id}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={hex} stopOpacity={0.55} />
-                      <stop offset="100%" stopColor={hex} stopOpacity={0.04} />
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid stroke="var(--border)" vertical={false} />
-                  <XAxis
-                    type="number" dataKey="time" domain={["dataMin", "dataMax"]}
-                    tick={{ fontSize: 10, fill: "var(--muted-foreground)" }}
-                    tickFormatter={(t: number) => new Date(t).toLocaleDateString("en-IN", { day: "2-digit", month: "short" })}
-                  />
-                  <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={46} tickFormatter={(t: number) => fmtAxis(t)} />
-                  <Tooltip
-                    cursor={{ stroke: "var(--border)" }}
-                    contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 10, fontSize: 12, backdropFilter: "blur(10px)" }}
-                    labelFormatter={(l) => new Date(Number(l)).toLocaleString("en-IN", { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" })}
-                    formatter={(val) => [`${num(Number(val))}`, "value"]}
-                  />
-                  <Area type="monotone" dataKey="amt" name="value" stroke={hex} strokeWidth={2} fill={`url(#wb-${a.id})`} animationDuration={900} />
-                </AreaChart>
-              </ResponsiveContainer>
+            <PanelTitle title="Graphical analysis" sub="Follow the money · one node per implicated transfer, bar length ∝ amount" />
+            <div className="mt-3">
+              <MoneyTrail txns={txns} hex={hex} />
             </div>
-            {chains.length > 0 && (
+            {txns.length > 1 && (
               <div className="mt-4 border-t border-dashed border-border pt-4">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">Dominant route chains</p>
-                <div className="mt-2 space-y-1.5">
-                  {chains.map((c, i) => (
-                    <div key={i} className="grid grid-cols-[1fr_auto] items-center gap-3 rounded-lg border border-border/60 bg-[color:var(--glass)] px-3 py-2">
-                      <span className="mono flex min-w-0 items-center gap-1.5 truncate text-[11.5px]">
-                        <span className="truncate rounded-md border border-border bg-muted/60 px-1.5 py-0.5" title={c.from}>{shortId(c.from)}</span>
-                        <RouteIcon className="h-3.5 w-3.5 shrink-0" style={{ color: hex }} />
-                        <span className="truncate rounded-md border border-border bg-muted/60 px-1.5 py-0.5" title={c.to}>{shortId(c.to)}</span>
-                      </span>
-                      <span className="tnum whitespace-nowrap text-right text-[11px] text-muted-foreground">
-                        <span className="font-semibold text-foreground">{c.n}×</span> · {fmtAxis(Math.round(c.v))} {c.cur}
-                      </span>
-                    </div>
-                  ))}
-                </div>
+                <AmountContext txns={txns} all={d.txns} hex={hex} />
               </div>
             )}
           </Card>
@@ -553,23 +706,20 @@ function Workbench({ id }: { id: string }) {
             </div>
           </Card>
 
-          <VerifyPanel a={a} />
+          <IntegrityPanel a={a} />
 
-          {/* context trio */}
-          <div className="grid gap-3 md:grid-cols-3">
-            <div className="rounded-xl border border-border/70 bg-[color:var(--glass)] p-4 text-[13px] backdrop-blur-md">
-              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"><Scale className="h-3.5 w-3.5" /> Plausible legitimate reading</p>
-              <p className="mt-2 leading-6 text-muted-foreground">{a.legitimate}</p>
+          {/* alternative readings + analyst checklist + blind spots */}
+          <div className="grid items-start gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-[color:var(--teal)]/30 bg-[color:var(--teal)]/8 p-4 text-[13px] backdrop-blur-md">
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--teal)]"><Scale className="h-3.5 w-3.5" /> Alternative readings</p>
+              <p className="mt-2 leading-6 text-foreground/90">{a.legitimate}</p>
+              <p className="mt-2 border-t border-[color:var(--teal)]/25 pt-2 text-[11px] leading-5 text-muted-foreground">A rule cannot separate these from the flagged pattern — only context can.</p>
             </div>
-            <div className="rounded-xl border border-border/70 bg-[color:var(--glass)] p-4 text-[13px] backdrop-blur-md">
-              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted-foreground"><ClipboardList className="h-3.5 w-3.5" /> Next checks</p>
-              <ul className="mt-2 space-y-1.5 text-muted-foreground">{a.checks.map((c, i) => (
-                <li key={i} className="flex gap-2"><span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-current" style={{ color: hex }} /><span>{c}</span></li>
-              ))}</ul>
-            </div>
+            <ChecklistCard key={a.id} a={a} />
             <div className="rounded-xl border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/8 p-4 text-[13px] backdrop-blur-md">
-              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--warning)]"><TriangleAlert className="h-3.5 w-3.5" /> Missing context</p>
+              <p className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-[color:var(--warning)]"><EyeOff className="h-3.5 w-3.5" /> Blind spots</p>
               <p className="mt-2 leading-6 text-foreground/90">{a.limitations}</p>
+              <p className="mt-2 border-t border-[color:var(--warning)]/25 pt-2 text-[11px] leading-5 text-muted-foreground">Know what this signal cannot tell you before escalating.</p>
             </div>
           </div>
         </div>

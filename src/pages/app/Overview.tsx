@@ -3,7 +3,7 @@ import { getSelected, loadAll, setSelected } from "@/lib/trace/store";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
 import {
-  Area, Bar, CartesianGrid, Cell, ComposedChart, Legend, Line,
+  Area, Bar, BarChart, CartesianGrid, Cell, ComposedChart, Legend, Line,
   Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 
@@ -44,16 +44,33 @@ export default function Overview() {
     return ds.alerts.filter((a) => (!cat || a.category === cat));
   }, [ds, cat]);
 
+  const flaggedIds = useMemo(() => {
+    const s = new Set<string>();
+    alerts.forEach((a) => a.txnIds.forEach((id) => s.add(id)));
+    return s;
+  }, [alerts]);
+  const hiIds = useMemo(() => {
+    const s = new Set<string>();
+    alerts.filter((a) => a.severity === "high" || a.severity === "critical").forEach((a) => a.txnIds.forEach((id) => s.add(id)));
+    return s;
+  }, [alerts]);
+
   const trend = useMemo(() => {
-    const buckets = new Map<string, { d: string; n: number; v: number; inn: number; out: number }>();
+    const perCur = new Map<string, number>();
+    txns.forEach((t) => perCur.set(t.currency, (perCur.get(t.currency) ?? 0) + 1));
+    const topCur = [...perCur.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? "";
+    const buckets = new Map<string, { d: string; n: number; v: number; f: number; h: number; tv: number }>();
     [...txns].sort((a, b) => a.epoch - b.epoch).forEach((t) => {
       const k = new Date(t.epoch).toISOString().slice(0, 10);
-      const e = buckets.get(k) ?? { d: k.slice(5), n: 0, v: 0, inn: 0, out: 0 };
+      const e = buckets.get(k) ?? { d: k.slice(5), n: 0, v: 0, f: 0, h: 0, tv: 0 };
       e.n++; e.v += t.amount;
+      if (flaggedIds.has(t.id)) e.f++;
+      if (hiIds.has(t.id)) e.h++;
+      if (topCur && t.currency === topCur) e.tv += t.amount;
       buckets.set(k, e);
     });
     return [...buckets.values()].slice(-30);
-  }, [txns]);
+  }, [txns, flaggedIds, hiIds]);
 
   const byCat = useMemo(() => {
     const m = new Map<string, number>();
@@ -64,8 +81,20 @@ export default function Overview() {
   const byCur = useMemo(() => {
     const m = new Map<string, { n: number; v: number }>();
     txns.forEach((t) => { const e = m.get(t.currency) ?? { n: 0, v: 0 }; e.n++; e.v += t.amount; m.set(t.currency, e); });
-    return [...m.entries()].map(([c, e]) => ({ c, ...e }));
+    return [...m.entries()].map(([c, e]) => ({ c, ...e })).sort((a, b) => b.n - a.n);
   }, [txns]);
+
+  const byCh = useMemo(() => {
+    const m = new Map<string, number>();
+    txns.forEach((t) => { const k = t.channel || "unknown"; m.set(k, (m.get(k) ?? 0) + 1); });
+    return [...m.entries()].map(([c, n]) => ({ c, n })).sort((a, b) => b.n - a.n).slice(0, 8);
+  }, [txns]);
+
+  const bySev = useMemo(() => {
+    const m = new Map<string, number>();
+    alerts.forEach((a) => m.set(a.severity, (m.get(a.severity) ?? 0) + 1));
+    return (["critical", "high", "medium", "low"] as const).filter((s) => m.has(s)).map((s) => ({ s, n: m.get(s)! }));
+  }, [alerts]);
 
   const domIntl = useMemo(() => {
     if (!ds) return [];
@@ -90,11 +119,10 @@ export default function Overview() {
 
   const accts = new Set([...txns.map((t) => t.sender), ...txns.map((t) => t.receiver)]);
   const hi = alerts.filter((a) => a.severity === "high" || a.severity === "critical");
-  const spark = (pick: (t: (typeof txns)[number]) => number) => trend.map((b) => pick({} as never)).map(() => 0);
-  void spark;
   const volSpark = trend.map((b) => b.n);
-  const valSpark = trend.map((b) => Math.round(b.v));
-  const alertSpark = trend.map((b, i) => Math.min(b.n, alerts.length ? Math.round((alerts.length / Math.max(1, trend.length)) * (1 + (i % 3))) : 0));
+  const valSpark = trend.map((b) => Math.round(b.tv));
+  const alertSpark = trend.map((b) => b.f);
+  const hiSpark = trend.map((b) => b.h);
 
   const currencies = [...new Set(ds.txns.map((t) => t.currency))];
   const categories = [...new Set(ds.alerts.map((a) => a.category))];
@@ -130,10 +158,10 @@ export default function Overview() {
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
         <Kpi label="Transactions Analysed" value={num(txns.length)} sub={`${ds.name} · tier ${ds.tier}`} spark={volSpark} />
         <Kpi label="Detection Alerts" value={num(alerts.length)} sub={`${byCat.length} categories`} spark={alertSpark} accent="var(--warning)" />
-        <Kpi label="High-Priority Reviews" value={num(hi.length)} sub="high + critical" spark={alertSpark} accent="var(--destructive)" />
+        <Kpi label="High-Priority Reviews" value={num(hi.length)} sub="high + critical" spark={hiSpark} accent="var(--destructive)" />
         <Kpi label="Connected Entities" value={num(accts.size)} sub="senders + receivers" />
         <Kpi label="Open Investigations" value={num(0)} sub="cases persist in workspace" />
-        <Kpi label="Value (top currency)" value={byCur[0] ? `${Math.round(byCur[0].v).toLocaleString("en-IN")} ${byCur[0].c}` : "—"} sub={byCur[0] ? `${num(byCur[0].n)} transfers` : "no data"} spark={valSpark} accent="var(--teal)" />
+        <Kpi label="Value (top currency)" value={byCur[0] ? `${Math.round(byCur[0].v).toLocaleString("en-IN")} ${byCur[0].c}` : "—"} sub={byCur[0] ? `${num(byCur[0].n)} transfers · ${byCur[0].c} only, single-currency` : "no data"} spark={valSpark} accent="var(--teal)" />
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">
@@ -152,10 +180,13 @@ export default function Overview() {
                 <YAxis tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} width={44} tickFormatter={(v: number) => v >= 1000 ? `${(v / 1000).toFixed(0)}k` : `${v}`} />
                 <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
                 <Legend wrapperStyle={{ fontSize: 11 }} />
-                {metric === "count"
-                  ? <Bar dataKey="n" name="Transactions" fill="#5B8CFF" radius={[2, 2, 0, 0]} />
-                  : <Area dataKey="v" name="Total value" fill="#26C6B8" fillOpacity={0.25} stroke="#26C6B8" strokeWidth={1.5} />}
-                <Line type="monotone" dataKey="n" name="Count (ref)" stroke="#F4B544" strokeWidth={1} dot={false} hide={metric === "count"} />
+                {metric === "count" ? (<>
+                  <Bar dataKey="n" name="Transactions" fill="#5B8CFF" radius={[2, 2, 0, 0]} />
+                  <Bar dataKey="f" name="Flagged in alerts" fill="#F05252" radius={[2, 2, 0, 0]} />
+                  <Line type="monotone" dataKey="h" name="High-priority" stroke="#F4B544" strokeWidth={1.5} dot={false} />
+                </>) : (
+                  <Area dataKey="tv" name={`Value (${byCur[0]?.c ?? ""} only)`} fill="#26C6B8" fillOpacity={0.25} stroke="#26C6B8" strokeWidth={1.5} />
+                )}
               </ComposedChart>
             </ResponsiveContainer>
           </div>
@@ -214,6 +245,41 @@ export default function Overview() {
         <Card>
           <PanelTitle title="Network Snapshot" sub="Top connected accounts" right={<Link to="/network" className="text-xs text-[color:var(--primary)] hover:underline">Open explorer →</Link>} />
           <MiniNet />
+        </Card>
+      </div>
+
+      <div className="grid gap-3 xl:grid-cols-2">
+        <Card>
+          <PanelTitle title="Channel Mix" sub="Transfers per payment rail · actual counts" />
+          <div className="h-56 px-2 pb-2">
+            <ResponsiveContainer>
+              <BarChart data={byCh} layout="vertical" margin={{ left: 8, right: 16 }}>
+                <CartesianGrid stroke="var(--border)" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <YAxis type="category" dataKey="c" width={92} tick={{ fontSize: 10, fill: "var(--muted-foreground)" }} />
+                <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                <Bar dataKey="n" name="Transfers" fill="#5B8CFF" radius={[0, 3, 3, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+        <Card>
+          <PanelTitle title="Review Priority" sub="Alerts by severity · click through to investigate" />
+          <div className="space-y-3 px-4 py-4">
+            {bySev.map((r) => (
+              <div key={r.s}>
+                <div className="flex justify-between text-xs">
+                  <span className="capitalize text-muted-foreground">{r.s}</span>
+                  <span className="tnum font-semibold">{num(r.n)} alerts</span>
+                </div>
+                <div className="mt-1 h-2 rounded bg-muted">
+                  <div className="h-2 rounded" style={{ width: `${alerts.length ? (r.n / alerts.length) * 100 : 0}%`, background: r.s === "critical" ? "#F05252" : r.s === "high" ? "#F4B544" : r.s === "medium" ? "#5B8CFF" : "#26C6B8" }} />
+                </div>
+              </div>
+            ))}
+            {bySev.length === 0 && <p className="text-[13px] text-muted-foreground">No alerts in scope — no severity to distribute.</p>}
+            <Link to="/detections" className="inline-block text-xs text-[color:var(--primary)] hover:underline">Open detection explorer →</Link>
+          </div>
         </Card>
       </div>
 

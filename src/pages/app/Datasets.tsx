@@ -102,7 +102,7 @@ export default function Datasets() {
 }
 
 interface Wiz {
-  step: number; name: string; desc: string; source: string;
+  step: number; name: string; desc: string; source: string; col2field?: Record<string, string>;
   cols?: string[]; rows?: Record<string, string>[]; maps?: FieldMapping[];
   overrides?: Record<string, string>; modes?: string[];
   txns?: NormalizedTxn[]; report?: QualityReport; alerts?: ReturnType<typeof runDetection>; rules?: RuleConfig[];
@@ -129,15 +129,14 @@ function Wizard({ w, setW, onDone, saveRemote }: { w: Wiz; setW: (x: Wiz | null)
     w.maps!.forEach((m) => { col2field[m.column] = w.overrides?.[m.column] ?? m.field ?? ""; });
     const map = buildMapping(col2field as Record<string, SemanticField | "">);
     const { txns, report } = normalize({ columns: w.cols!, rows: w.rows!, delimiter: ",", encodingNote: "" }, map);
-    const r = readiness(map);
     const need: Record<string, boolean> = { sender: !!map.sender, receiver: !!map.receiver, amount: !!map.amount, timestamp: !!map.timestamp };
     const modes = MODES.filter((m) => m.need.every((n) => need[n])).map((m) => m.id);
-    set({ txns, report, modes, step: 4, col2fieldCache: undefined } as Partial<Wiz>);
-    (set as unknown as (p: Record<string, unknown>) => void)({ col2field: col2field });
+    set({ txns, report, modes, step: 4, col2field });
   }
 
   async function run() {
-    const col2field = (w as unknown as { col2field: Record<string, string> }).col2field;
+    const col2field = w.col2field ?? {};
+    if (!Object.keys(col2field).length) { alert("The schema mapping was lost — please go back and confirm it again."); setW({ ...w, step: 3 }); return; }
     const map = buildMapping(col2field as Record<string, SemanticField | "">);
     const { txns, report } = normalize({ columns: w.cols!, rows: w.rows!, delimiter: ",", encodingNote: "" }, map);
     const rules = DEFAULT_RULES.map((x) => ({ ...x }));
@@ -244,8 +243,9 @@ function Wizard({ w, setW, onDone, saveRemote }: { w: Wiz; setW: (x: Wiz | null)
           <div className="mt-3 grid gap-2 md:grid-cols-2">
             {MODES.map((m) => {
               const on = w.modes?.includes(m.id);
-              const col2field = (w as unknown as { col2field?: Record<string, string> }).col2field ?? {};
-              const missing = m.need.filter((n) => !col2field[n]);
+              const col2field = w.col2field ?? {};
+              const have = new Set(Object.values(col2field));
+              const missing = m.need.filter((n) => !have.has(n));
               return (
                 <label key={m.id} className={`flex items-start gap-2.5 rounded-lg border border-border p-3 text-[13px] ${missing.length ? "opacity-50" : ""}`}>
                   <input type="checkbox" disabled={missing.length > 0} checked={!!on && missing.length === 0}

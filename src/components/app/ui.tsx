@@ -24,13 +24,13 @@ export function PanelTitle({ title, sub, right }: { title: string; sub?: string;
 
 export function Kpi({ label, value, sub, spark, accent }: { label: string; value: string; sub?: string; spark?: number[]; accent?: string }) {
   return (
-    <div className="rounded-lg border border-border bg-card px-4 py-3">
-      <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
+    <div className="min-w-0 overflow-hidden rounded-lg border border-border bg-card px-4 py-3">
+      <p className="truncate text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">{label}</p>
       <div className="mt-1 flex items-end justify-between gap-2">
-        <p className="tnum text-xl font-bold tracking-tight text-foreground">{value}</p>
+        <p className="tnum min-w-0 flex-1 truncate text-xl font-bold tracking-tight text-foreground" title={value}>{value}</p>
         {spark && spark.length > 1 && <Sparkline data={spark} color={accent ?? "var(--primary)"} />}
       </div>
-      {sub && <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{sub}</p>}
+      {sub && <p className="mt-0.5 truncate text-[11px] text-muted-foreground" title={sub}>{sub}</p>}
     </div>
   );
 }
@@ -38,12 +38,24 @@ export function Kpi({ label, value, sub, spark, accent }: { label: string; value
 export function Sparkline({ data, color, w = 84, h = 26 }: { data: number[]; color: string; w?: number; h?: number }) {
   const max = Math.max(...data, 1);
   const min = Math.min(...data, 0);
-  const pts = data.map((v, i) => `${(i / Math.max(1, data.length - 1)) * w},${h - 3 - ((v - min) / Math.max(1, max - min)) * (h - 6)}`).join(" ");
+  const span = Math.max(1, max - min);
+  const pts = data.map((v, i) => `${(2 + (i / Math.max(1, data.length - 1)) * (w - 4)).toFixed(1)},${(h - 3 - ((v - min) / span) * (h - 6)).toFixed(1)}`).join(" ");
   return (
-    <svg width={w} height={h} className="shrink-0 opacity-90" aria-hidden>
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="max-w-[84px] shrink-0 overflow-visible opacity-90" aria-hidden>
       <polyline points={pts} fill="none" stroke={color} strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
     </svg>
   );
+}
+
+/** Compact Indian-format number: 5,99,71,685 → "₹5.99 Cr". Fits KPI cards at any width. */
+export function fmtBig(n: number, cur = "") {
+  const a = Math.abs(n);
+  const pre = cur === "INR" ? "₹" : "";
+  const suf = cur && cur !== "INR" ? ` ${cur}` : "";
+  if (a >= 1e7) return `${pre}${(n / 1e7).toFixed(2)} Cr${suf}`;
+  if (a >= 1e5) return `${pre}${(n / 1e5).toFixed(2)} L${suf}`;
+  if (a >= 1e3) return `${(n / 1e3).toFixed(1)}k${suf}`;
+  return `${Math.round(n).toLocaleString("en-IN")}${suf}`;
 }
 
 export function Empty({ title, body, action }: { title: string; body: string; action?: ReactNode }) {

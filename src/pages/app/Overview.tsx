@@ -1,4 +1,4 @@
-import { Card, Empty, Kpi, PanelTitle, SevBadge, emit, num } from "@/components/app/Shell";
+import { Card, Empty, Kpi, PanelTitle, SevBadge, emit, fmtBig, num } from "@/components/app/Shell";
 import { getSelected, loadAll, setSelected } from "@/lib/trace/store";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router";
@@ -155,13 +155,13 @@ export default function Overview() {
       </div>
 
       {/* KPI row */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-        <Kpi label="Transactions Analysed" value={num(txns.length)} sub={`${ds.name} · tier ${ds.tier}`} spark={volSpark} />
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
+        <Kpi label="Transactions Analysed" value={num(txns.length)} sub={`tier ${ds.tier} · ${ds.source}`} spark={volSpark} />
         <Kpi label="Detection Alerts" value={num(alerts.length)} sub={`${byCat.length} categories`} spark={alertSpark} accent="var(--warning)" />
         <Kpi label="High-Priority Reviews" value={num(hi.length)} sub="high + critical" spark={hiSpark} accent="var(--destructive)" />
         <Kpi label="Connected Entities" value={num(accts.size)} sub="senders + receivers" />
         <Kpi label="Open Investigations" value={num(0)} sub="cases persist in workspace" />
-        <Kpi label="Value (top currency)" value={byCur[0] ? `${Math.round(byCur[0].v).toLocaleString("en-IN")} ${byCur[0].c}` : "—"} sub={byCur[0] ? `${num(byCur[0].n)} transfers · ${byCur[0].c} only, single-currency` : "no data"} spark={valSpark} accent="var(--teal)" />
+        <Kpi label="Value (top currency)" value={byCur[0] ? fmtBig(byCur[0].v, byCur[0].c) : "—"} sub={byCur[0] ? `${num(byCur[0].n)} transfers · ${byCur[0].c} only` : "no data"} spark={valSpark} accent="var(--teal)" />
       </div>
 
       <div className="grid gap-3 xl:grid-cols-3">

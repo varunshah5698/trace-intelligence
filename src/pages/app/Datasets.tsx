@@ -4,11 +4,12 @@ import { DEFAULT_RULES, runDetection, type RuleConfig } from "@/lib/trace/detect
 import { generate } from "@/lib/trace/synthetic";
 import { download, loadAll, saveAll, setSelected, type Dataset } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
+import { prepareTable } from "@/lib/trace/prepare";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import { ArrowLeft, ArrowRight, CheckCircle2, FileUp, Trash2 } from "lucide-react";
-import { useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { useEffect, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
 
 const FIELD_OPTS: (SemanticField | "")[] = ["", "txn_id", "sender", "receiver", "amount", "currency", "timestamp", "origin_country", "dest_country", "channel", "purpose", "status", "ignore"];
 const MODES = [
@@ -23,9 +24,14 @@ const MODES = [
 
 export default function Datasets() {
   const nav = useNavigate();
+  const loc = useLocation();
   const saveRemote = useMutation(api.trace.save);
   const [list, setList] = useState<Dataset[]>(loadAll());
-  const [wizard, setWizard] = useState<null | Wiz>(null);
+  // /datasets/new opens the upload wizard directly — never the library.
+  const [wizard, setWizard] = useState<null | Wiz>(() => (loc.pathname.endsWith("/new") ? { step: 1, name: "", desc: "", source: "Mixed" } : null));
+  useEffect(() => {
+    if (loc.pathname.endsWith("/new")) setWizard((w) => w ?? { step: 1, name: "", desc: "", source: "Mixed" });
+  }, [loc.pathname]);
 
   function refresh() { setList(loadAll()); }
   function del(id: string) {
@@ -102,7 +108,7 @@ export default function Datasets() {
 }
 
 interface Wiz {
-  step: number; name: string; desc: string; source: string; col2field?: Record<string, string>;
+  step: number; name: string; desc: string; source: string; cleaning?: { step: string; detail: string }[]; col2field?: Record<string, string>;
   cols?: string[]; rows?: Record<string, string>[]; maps?: FieldMapping[];
   overrides?: Record<string, string>; modes?: string[];
   txns?: NormalizedTxn[]; report?: QualityReport; alerts?: ReturnType<typeof runDetection>; rules?: RuleConfig[];
@@ -120,7 +126,10 @@ function Wizard({ w, setW, onDone, saveRemote }: { w: Wiz; setW: (x: Wiz | null)
     const text = await f.text();
     const t = parseCSV(text);
     if (!t.columns.length) { alert("No columns found. Check the file."); setPhase(""); return; }
-    set({ cols: t.columns, rows: t.rows, maps: inferMapping(t), overrides: {}, name: w.name || f.name.replace(/\.csv$/i, ""), step: 2 });
+    const prep = prepareTable(t);
+    if (!prep.rows.length) { alert(`No usable rows survived cleaning (${prep.droppedEmpty} empty, ${prep.droppedDuplicates} duplicates). Check the file.`); setPhase(""); return; }
+    const sample = { columns: prep.columns, rows: prep.rows.slice(0, 200), delimiter: ",", encodingNote: "" };
+    set({ cols: prep.columns, rows: prep.rows, maps: inferMapping(sample), overrides: {}, cleaning: prep.ops, name: w.name || f.name.replace(/\.csv$/i, ""), step: 2 });
     setPhase("");
   }
 
@@ -295,6 +304,19 @@ function InspectStep({ w, onNext }: { w: Wiz; onNext: () => void }) {
           </div>
         ))}
       </div>
+      {w.cleaning && w.cleaning.length > 0 && (
+        <Card className="p-4">
+          <PanelTitle title="Cleaning engine" sub={`${num(w.rows!.length)} rows kept · every action logged, nothing silently dropped`} />
+          <ul className="mt-2 space-y-1 text-[13px]">
+            {w.cleaning.map((c, i) => (
+              <li key={i} className="flex gap-2">
+                <span className="font-bold text-[color:var(--success)]">✓</span>
+                <span><span className="font-medium">{c.step}:</span> <span className="text-muted-foreground">{c.detail}</span></span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
       {report.warnings.length > 0 && (
         <WarnStrip><ul className="list-disc pl-4">{report.warnings.map((x, i) => <li key={i}>{x}</li>)}</ul></WarnStrip>
       )}

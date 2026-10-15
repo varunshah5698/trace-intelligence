@@ -4,9 +4,9 @@ import { seedDemoWorkspace } from "./safety";
 import { toast } from "sonner";
 import { useTheme } from "next-themes";
 import {
-  ArrowLeftRight, Bell, BookOpenCheck, Briefcase, CalendarDays, Database, FileUp,
-  FlaskConical, History, Landmark, LayoutDashboard, LogOut, Menu, MessagesSquare,
-  Moon, House, Network, Search, Settings, ShieldAlert, ShieldCheck, Store, Sun, Users, Waypoints, X,
+  ArrowLeftRight, Bell, BookOpenCheck, Briefcase, Database, FileUp,
+  FlaskConical, History, Landmark, LayoutDashboard, LogOut, Menu,
+  Moon, House, Network, Search, Settings, ShieldAlert, ShieldCheck, Sun, Users, Waypoints, X,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink, useLocation, useNavigate } from "react-router";
@@ -49,17 +49,8 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
     head: "Investigations",
     items: [
       { to: "/investigations", label: "Investigation Cases", icon: Briefcase },
-      { to: "/audit", label: "Audit Trail", icon: History },
-    ],
-  },
-  {
-    head: "Customer Portal",
-    items: [
-      { to: "/catalog", label: "Service Catalog", icon: Store },
-      { to: "/bookings", label: "Bookings", icon: CalendarDays },
-      { to: "/community", label: "Community", icon: MessagesSquare },
       { to: "/entities", label: "Entities", icon: Users },
-      { to: "/admin", label: "Admin", icon: ShieldCheck },
+      { to: "/audit", label: "Audit Trail", icon: History },
     ],
   },
 ];

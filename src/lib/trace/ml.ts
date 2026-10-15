@@ -8,6 +8,7 @@ import { toast } from "sonner";
 export interface ModelMeta {
   version: string;
   trees: number;
+  seeds: number[];
   sample: number;
   records: number;
   features: string[];
@@ -48,6 +49,10 @@ const FEATURE_NAMES = [
   "sender_per_day",
   "fan_peer_count",
   "is_weekend",
+  "is_round_figure",
+  "sender_median_ratio",
+  "channel_rarity",
+  "night_hour",
 ];
 
 function featureMatrix(txns: NormalizedTxn[]): number[][] {
@@ -67,6 +72,16 @@ function featureMatrix(txns: NormalizedTxn[]): number[][] {
     totals.set(k, s);
     grand += s;
   });
+  const medians = new Map<string, number>();
+  byS.forEach((v, k) => {
+    const srt = [...v].sort((a, b) => a - b);
+    medians.set(k, srt[Math.floor(srt.length / 2)] ?? 0);
+  });
+  const chFreq = new Map<string, number>();
+  txns.forEach((t) => {
+    const k = t.channel || "unknown";
+    chFreq.set(k, (chFreq.get(k) ?? 0) + 1);
+  });
   const order = [...txns].sort((a, b) => a.epoch - b.epoch);
   const known = new Set(order.slice(0, Math.floor(order.length * 0.7)).map((t) => t.sender + ">" + t.receiver));
   const raw = txns.map((t) => {
@@ -78,6 +93,9 @@ function featureMatrix(txns: NormalizedTxn[]): number[][] {
     const perDay = arr.length / spanDays;
     const peerCount = peers.get(t.sender)?.size ?? 1;
     const dow = new Date(t.epoch).getUTCDay();
+    const med = medians.get(t.sender) ?? t.amount;
+    const chF = (chFreq.get(t.channel || "unknown") ?? 1) / Math.max(1, txns.length);
+    const hr = new Date(t.epoch).getHours();
     return [
       Math.log10(Math.max(1, t.amount)),
       (t.amount - m) / s,
@@ -89,6 +107,10 @@ function featureMatrix(txns: NormalizedTxn[]): number[][] {
       Math.log10(1 + perDay),
       Math.log10(peerCount),
       dow === 0 || dow === 6 ? 1 : 0,
+      t.amount >= 1000 && t.amount % 1000 === 0 ? 1 : 0,
+      med > 0 ? Math.log10(Math.max(0.01, t.amount / med)) : 0,
+      1 - chF,
+      hr < 6 || hr >= 22 ? 1 : 0,
     ];
   });
   const dim = FEATURE_NAMES.length;
@@ -112,23 +134,34 @@ export function mlAnomalyAlerts(
   if (txns.length < 20) return out;
   const trees = Math.max(100, Math.min(400, Number(params.trees ?? 300)));
   const cont = Math.min(0.2, Math.max(0.01, Number(params.contamination ?? 0.05)));
-  const seed = 20240 + (txns.length % 997);
+  const baseSeed = 20240 + (txns.length % 997);
+  const seeds = [baseSeed, baseSeed + 101, baseSeed + 977];
   const X = featureMatrix(txns);
-  const forest = trainForest(X, { trees, sample: Math.min(512, X.length), seed });
-  const scores = scoreForest(forest, X);
+  const perSeed = Math.max(50, Math.round(trees / seeds.length));
+  const totalTrees = perSeed * seeds.length;
+  const sample = Math.min(512, X.length);
+  // Multi-seed ensemble: average isolation scores so one unlucky split can't dominate.
+  const acc = new Array<number>(X.length).fill(0);
+  for (const s of seeds) {
+    const forest = trainForest(X, { trees: perSeed, sample, seed: s });
+    const sc = scoreForest(forest, X);
+    for (let i = 0; i < acc.length; i++) acc[i] += (sc[i] ?? 0) / seeds.length;
+  }
+  const scores = acc;
   const ordered = [...scores].sort((a, b) => a - b);
   const threshold = ordered[Math.min(ordered.length - 1, Math.floor(ordered.length * (1 - cont)))];
   try {
     const meta: ModelMeta = {
-      version: "iforest-v2",
-      trees,
-      sample: forest.sample,
+      version: "iforest-v3",
+      trees: totalTrees,
+      seeds,
+      sample,
       records: X.length,
       features: FEATURE_NAMES,
       contamination: cont,
       threshold: Math.round(threshold * 1000) / 1000,
       trainedAt: new Date().toISOString(),
-      seed,
+      seed: baseSeed,
     };
     localStorage.setItem(MODEL_KEY, JSON.stringify(meta));
   } catch {
@@ -177,7 +210,7 @@ export function mlAnomalyAlerts(
       entities: [t.sender, t.receiver],
       evidence: [
         { label: "Isolation score", value: s.toFixed(3) + " (threshold " + threshold.toFixed(3) + ", top " + Math.round(cont * 100) + "%)" },
-        { label: "Model", value: "iforest-v1 · " + trees + " trees · " + X.length + " records · " + FEATURE_NAMES.length + " features" },
+        { label: "Model", value: "iforest-v3 · " + totalTrees + " trees x 3 seeds · " + X.length + " records · " + FEATURE_NAMES.length + " features" },
         { label: "Top signals", value: reasons.join("; ").slice(0, 240) },
         { label: "Transfer", value: t.sender + " to " + t.receiver + " · " + t.amount + " " + t.currency },
       ],

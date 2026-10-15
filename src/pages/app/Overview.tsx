@@ -193,22 +193,28 @@ export default function Overview() {
         </Card>
         {/* distribution */}
         <Card>
-          <PanelTitle title="Detection Distribution" sub="Actual category totals" />
-          <div className="h-44">
+          <PanelTitle title="Detection Distribution" sub="Actual category totals · share of alerts" />
+          <div className="relative h-52">
             <ResponsiveContainer>
               <PieChart>
-                <Pie data={byCat} dataKey="n" nameKey="c" innerRadius={48} outerRadius={72} paddingAngle={2}>
+                <Pie data={byCat} dataKey="n" nameKey="c" innerRadius={56} outerRadius={80} paddingAngle={3} cornerRadius={4} stroke="var(--card)" strokeWidth={2}>
                   {byCat.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
-                <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }} />
+                <Tooltip contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                  formatter={(v, name) => [`${v} (${alerts.length ? Math.round((Number(v) / alerts.length) * 100) : 0}%)`, name]} />
               </PieChart>
             </ResponsiveContainer>
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+              <p className="tnum text-2xl font-extrabold">{num(alerts.length)}</p>
+              <p className="text-[11px] text-muted-foreground">alerts</p>
+            </div>
           </div>
           <div className="space-y-1.5 px-4 pb-4 text-xs">
             {byCat.map((r, i) => (
               <div key={r.c} className="flex items-center gap-2">
                 <span className="h-2 w-2 rounded-sm" style={{ background: COLORS[i % COLORS.length] }} />
                 <span className="flex-1 truncate text-muted-foreground">{r.c}</span>
+                <span className="tnum text-muted-foreground">{alerts.length ? Math.round((r.n / alerts.length) * 100) : 0}%</span>
                 <span className="tnum font-semibold">{r.n}</span>
               </div>
             ))}

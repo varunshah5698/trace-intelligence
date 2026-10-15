@@ -2,6 +2,7 @@ import { Card, Empty, PanelTitle, WarnStrip, btnGhost, btnPrimary, emit } from "
 import { toCSV } from "@/lib/trace/csv";
 import { evaluate, runDetection } from "@/lib/trace/detect";
 import { download, getSelected, loadAll, saveAll, type Dataset } from "@/lib/trace/store";
+import { readModelMeta } from "@/lib/trace/ml";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
@@ -74,6 +75,14 @@ function reportButtons(ds: Dataset, evalNow: () => ReturnType<typeof evaluate> |
     });
   }
   return list;
+}
+
+function ModelStatus() {
+  const [meta] = useState(readModelMeta);
+  if (!meta) return <span className="text-right">not fitted — trains on the next analysis run</span>;
+  return (
+    <span className="text-right">fitted · {meta.version} · {meta.trees} trees × {meta.seeds?.length ?? 1} seeds · {meta.records} records · {meta.features.length} features · {new Date(meta.trainedAt).toLocaleString()}</span>
+  );
 }
 
 export default function Governance({ view }: { view: string }) {
@@ -185,7 +194,7 @@ export default function Governance({ view }: { view: string }) {
               <div className="mt-2 space-y-1.5 text-[13px]">
                 <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Rule engine</span><span>v1 · 8 rules</span></div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Anomaly (z-score)</span><span>active · transparent baseline</span></div>
-                <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Isolation Forest</span><span>not fitted — ships when training data is configured</span></div>
+                <div className="flex justify-between gap-3 border-b border-border/50 pb-1.5"><span className="shrink-0 text-muted-foreground">Isolation Forest</span><ModelStatus /></div>
                 <div className="flex justify-between border-b border-border/50 pb-1.5"><span className="text-muted-foreground">Graph signals</span><span>active · 4-hop max cycles, fan 4+</span></div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Labels as features</span><span className="font-semibold">Never</span></div>
               </div>

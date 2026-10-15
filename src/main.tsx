@@ -28,12 +28,6 @@ const FundFlows = lazy(() => import("./pages/app/FundFlows.tsx"));
 const Entities = lazy(() => import("./pages/app/Entities.tsx"));
 const FxHistory = lazy(() => import("./pages/app/FxHistory.tsx"));
 const Cases = lazy(() => import("./pages/app/Cases.tsx"));
-const Catalog = lazy(() => import("./pages/app/Catalog.tsx"));
-const CatalogDetail = lazy(() => import("./pages/app/CatalogDetail.tsx"));
-const Bookings = lazy(() => import("./pages/app/Bookings.tsx"));
-const Checkout = lazy(() => import("./pages/app/Checkout.tsx"));
-const Community = lazy(() => import("./pages/app/Community.tsx").then((m) => ({ default: m.Community })));
-const Admin = lazy(() => import("./pages/app/Admin.tsx"));
 const Settings = lazy(() => import("./pages/app/Settings.tsx"));
 const NotFound = lazy(() => import("./pages/NotFound.tsx"));
 
@@ -145,12 +139,6 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/investigations/:id" element={<App title="Case Workbench" sub="Notes and status persist."><Cases /></App>} />
                   <Route path="/settings" element={<App title="Settings" sub="Workspace, account, notifications, provider configuration."><Settings /></App>} />
                   <Route path="/governance" element={<App title="Settings" sub="Workspace, account, notifications, provider configuration."><Settings /></App>} />
-                  <Route path="/catalog" element={<App title="Service Catalog" sub="Browse what we can do for you, then book or buy in one click."><Catalog /></App>} />
-                  <Route path="/catalog/:id" element={<App title="Service Details" sub="Book a time, pay securely, ask questions."><CatalogDetail /></App>} />
-                  <Route path="/bookings" element={<App title="Bookings" sub="Schedule a session and manage your calendar."><Bookings /></App>} />
-                  <Route path="/checkout" element={<App title="Checkout" sub="Transparent pricing, instant receipts."><Checkout /></App>} />
-                  <Route path="/community" element={<App title="Community" sub="Post your data, ask anything, help each other out."><Community /></App>} />
-                  <Route path="/admin" element={<App title="Admin Area" sub="Bookings, orders, posts, workspace, audit — everything in one place."><Admin /></App>} />
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>

@@ -4,7 +4,19 @@ import { download } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { CartesianGrid, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { Link } from "react-router";
+import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+
+/** Shared pair selection: FX Market and FX History stay on the same currency pair. */
+function loadSelPair(): string {
+  try {
+    const p = localStorage.getItem("trace.fx.pair");
+    return p && PAIRS.includes(p) ? p : "USD/INR";
+  } catch { return "USD/INR"; }
+}
+function saveSelPair(p: string) {
+  try { localStorage.setItem("trace.fx.pair", p); } catch { /* quota */ }
+}
 
 function useQuotes(pairs: string[] = PAIRS) {
   return useQuery({
@@ -17,7 +29,8 @@ function useQuotes(pairs: string[] = PAIRS) {
 
 export function FxMarket() {
   const { data, isPending, isError, refetch, dataUpdatedAt } = useQuotes();
-  const [sel, setSel] = useState("USD/INR");
+  const [sel, setSel] = useState(loadSelPair);
+  const selectPair = (p: string) => { setSel(p); saveSelPair(p); };
   const [search, setSearch] = useState("");
   const [watch, setWatch] = useState<string[]>(() => { try { return JSON.parse(localStorage.getItem("trace.watch") ?? '["USD/INR","EUR/INR"]'); } catch { return ["USD/INR", "EUR/INR"]; } });
   const [range, setRange] = useState(60);
@@ -25,7 +38,21 @@ export function FxMarket() {
   const state = data?.state ?? (isPending ? "loading" : "unavailable");
 
   const histQ = useQuery({ queryKey: ["fx-hist", sel, range], queryFn: () => fetchHistory(sel, range) });
-  const hist = histQ.data ?? [];
+  const hist = useMemo(() => histQ.data ?? [], [histQ.data]);
+  // Detailed graph analysis for the selected pair: period statistics + daily-change series.
+  const period = useMemo(() => {
+    if (hist.length < 2) return null;
+    const rates = hist.map((h) => h.rate);
+    const first = rates[0], last = rates[rates.length - 1];
+    const hi = Math.max(...rates), lo = Math.min(...rates);
+    const mean = rates.reduce((s, r) => s + r, 0) / rates.length;
+    const vol = Math.sqrt(rates.reduce((s, r) => s + (r - mean) ** 2, 0) / rates.length);
+    return { hi, lo, mean, vol, chgP: ((last - first) / first) * 100 };
+  }, [hist]);
+  const dailyBars = useMemo(() => hist.slice(1).map((h, i) => ({
+    date: h.date,
+    chg: ((h.rate - hist[i].rate) / hist[i].rate) * 100,
+  })), [hist]);
   const q = quotes.find((x) => x.pair === sel);
   const prev = hist.length > 1 ? hist[hist.length - 2].rate : null;
   const chg = q && prev ? q.mid - prev : null;
@@ -66,7 +93,7 @@ export function FxMarket() {
                   const qq = quotes.find((x) => x.pair === p);
                   const spr = qq?.bid && qq?.ask ? (((qq.ask - qq.bid) / qq.mid) * 10000).toFixed(1) : "—";
                   return (
-                    <tr key={p} onClick={() => setSel(p)} className={`cursor-pointer border-b border-border/50 hover:bg-muted/40 ${sel === p ? "bg-[color:var(--primary)]/10" : ""}`}>
+                    <tr key={p} onClick={() => selectPair(p)} className={`cursor-pointer border-b border-border/50 hover:bg-muted/40 ${sel === p ? "bg-[color:var(--primary)]/10" : ""}`}>
                       <td className="px-3 py-2 font-semibold">{p} <button onClick={(e) => { e.stopPropagation(); toggleWatch(p); }} className="ml-1 text-muted-foreground hover:text-foreground" title="Watchlist">{watch.includes(p) ? "★" : "☆"}</button></td>
                       <td className="tnum px-3 py-2 font-bold">{qq ? qq.mid.toFixed(4) : "—"}</td>
                       <td className="tnum px-3 py-2 text-muted-foreground">{qq?.bid?.toFixed(4) ?? "—"}</td>
@@ -120,6 +147,47 @@ export function FxMarket() {
               </div>
             )}
           </div>
+          {period && (
+            <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              {([
+                { k: "Period Δ", v: `${period.chgP >= 0 ? "+" : ""}${period.chgP.toFixed(2)}%`, good: period.chgP >= 0 },
+                { k: "High", v: period.hi.toFixed(4) },
+                { k: "Low", v: period.lo.toFixed(4) },
+                { k: "Mean", v: period.mean.toFixed(4) },
+                { k: "Volatility σ", v: period.vol.toFixed(4) },
+              ]).map((s) => (
+                <div key={s.k} className="rounded-lg border border-border bg-background px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wider text-muted-foreground">{s.k}</p>
+                  <p className={`tnum text-[13px] font-bold ${s.good === undefined ? "" : s.good ? "text-[color:var(--success)]" : "text-[color:var(--destructive)]"}`}>{s.v}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          {dailyBars.length > 0 && (
+            <div className="mt-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">Daily change (%)</p>
+                <Link to="/fx/history" className="text-[11px] font-medium text-[#c4b5fd] hover:underline">Open detailed history analysis →</Link>
+              </div>
+              <div className="mt-1 h-24">
+                <ResponsiveContainer>
+                  <BarChart data={dailyBars} margin={{ top: 4, right: 4, left: 4, bottom: 0 }}>
+                    <XAxis dataKey="date" hide />
+                    <YAxis hide domain={["auto", "auto"]} />
+                    <Tooltip
+                      contentStyle={{ background: "var(--elevated)", border: "1px solid var(--border)", borderRadius: 8, fontSize: 12 }}
+                      labelFormatter={(d) => `Date ${d}`}
+                      formatter={(v) => [`${Number(v).toFixed(4)}%`, "Change"]}
+                      cursor={{ fill: "rgba(255,255,255,0.05)" }}
+                    />
+                    <Bar dataKey="chg">
+                      {dailyBars.map((b) => <Cell key={b.date} fill={b.chg >= 0 ? "#34d399" : "#fb7185"} />)}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+          )}
           <div className="mt-2 flex flex-wrap gap-2">
             <button onClick={() => download(`${sel}-history.csv`, toCSV(hist.map((h) => ({ date: h.date, rate: h.rate, source: "frankfurter-ecb-reference" }))))} disabled={hist.length === 0} className={`${btnGhost} disabled:opacity-40`}>Export actual data</button>
             <span className="self-center text-[11px] text-muted-foreground">Watchlist: {watch.join(", ") || "—"}</span>

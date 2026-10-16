@@ -7,7 +7,14 @@ import { useMemo, useState } from "react";
 import { Area, CartesianGrid, ComposedChart, Legend, Line, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 export default function FxHistory() {
-  const [pair, setPair] = useState("USD/INR");
+  // Reads (and writes back) the shared pair so it stays in sync with FX Market.
+  const [pair, setPair] = useState(() => {
+    try { const p = localStorage.getItem("trace.fx.pair"); return p && PAIRS.includes(p) ? p : "USD/INR"; } catch { return "USD/INR"; }
+  });
+  const selectPair = (p: string) => {
+    setPair(p);
+    try { localStorage.setItem("trace.fx.pair", p); } catch { /* quota */ }
+  };
   const [days, setDays] = useState(60);
   const [view, setView] = useState<"chart" | "table">("chart");
   const live = useQuery({ queryKey: ["fx-quotes"], queryFn: () => fetchLiveQuotes(PAIRS) });
@@ -29,7 +36,7 @@ export default function FxHistory() {
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2">
-        <select value={pair} onChange={(e) => setPair(e.target.value)} className={`${inputCls} w-40`} aria-label="Currency pair">
+        <select value={pair} onChange={(e) => selectPair(e.target.value)} className={`${inputCls} w-40`} aria-label="Currency pair">
           {PAIRS.map((p) => <option key={p}>{p}</option>)}
         </select>
         <select value={days} onChange={(e) => setDays(Number(e.target.value))} className={`${inputCls} w-36`} aria-label="Date range">

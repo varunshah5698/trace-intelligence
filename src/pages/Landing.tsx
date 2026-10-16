@@ -30,13 +30,6 @@ const NAV = [
   { to: "#trust", label: "Trust" },
 ];
 
-const STATS = [
-  { v: "9", l: "detection rules" },
-  { v: "100%", l: "alerts with evidence" },
-  { v: "0", l: "rows leave your browser" },
-  { v: "4", l: "steps: file to report" },
-];
-
 const PLATFORM = [
   { t: "Any CSV, understood", d: "Unfamiliar columns, dates and currencies mapped with confidence scores — never silent guesses." },
   { t: "Explainable alerts", d: "Structuring, velocity, pass-through, cycles and an anomaly model — each alert cites its transactions." },
@@ -151,18 +144,6 @@ export default function Landing() {
                 </Link>
               </motion.span>
             </motion.div>
-          </div>
-
-          {/* stat band */}
-          <div className="grid gap-3 border-y border-border/50 py-5 sm:grid-cols-2 lg:grid-cols-4">
-            {STATS.map((s, i) => (
-              <Rise key={s.l} delay={i * 0.06}>
-                <div className="px-1">
-                  <p className="display tnum text-2xl font-bold tracking-tight">{s.v}</p>
-                  <p className="text-[12.5px] text-muted-foreground">{s.l}</p>
-                </div>
-              </Rise>
-            ))}
           </div>
         </div>
       </section>

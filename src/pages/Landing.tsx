@@ -1,5 +1,5 @@
 import { motion } from "framer-motion";
-import { ArrowRight, BadgeCheck, Fingerprint, Lock, Radar, ScanSearch, Sparkles } from "lucide-react";
+import { ArrowRight, BadgeCheck, Fingerprint, Lock, Radar, ScanSearch } from "lucide-react";
 import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Logo } from "@/components/app/Logo";
@@ -120,11 +120,6 @@ export default function Landing() {
 
         <div className="relative mx-auto max-w-6xl px-5">
           <div className="mx-auto max-w-2xl py-20 text-center md:py-28">
-            <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: EASE }}>
-              <span className="inline-flex items-center gap-2 rounded-full border border-[color:var(--primary)]/45 bg-[#141026]/80 px-3.5 py-1.5 text-[11px] font-medium text-[#c4b5fd] backdrop-blur-md">
-                <Sparkles className="h-3.5 w-3.5" /> Transaction monitoring &amp; AML investigation
-              </span>
-            </motion.div>
             <motion.h1
               initial={{ opacity: 0, y: 22 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.7, delay: 0.08, ease: EASE }}
               className="display mt-5 text-4xl font-bold leading-[1.08] tracking-tight md:text-[3rem]"

@@ -52,7 +52,7 @@ export default function DatasetDetail() {
         ))}
         <div className="ml-auto flex gap-2 pb-1">
           <button onClick={() => download(`${ds.name}-quality.csv`, toCSV(r.missingByColumn.map((m) => ({ column: m.column, missing_pct: m.pct }))))} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"><Download className="h-3 w-3" /> Quality CSV</button>
-          <button onClick={() => download(`${ds.name}-alerts.csv`, toCSV(ds.alerts.map((a) => ({ id: a.id, rule: a.ruleId, category: a.category, severity: a.severity, score: a.score, txns: a.txnIds.join(";") }))))} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"><Download className="h-3 w-3" /> Alerts CSV</button>
+          <button onClick={() => download(`${ds.name}-alerts.csv`, toCSV(ds.alerts.map((a) => ({ id: a.id, rule: a.ruleId, category: a.category, severity: a.severity, score: Math.round(a.score), txns: a.txnIds.join(";") }))))} className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-xs hover:bg-muted"><Download className="h-3 w-3" /> Alerts CSV</button>
         </div>
       </div>
 

@@ -180,7 +180,7 @@ function Profile({ id }: { id: string }) {
         <div className="min-w-0">
           <p className="mono text-[10px] uppercase tracking-[0.18em] text-muted-foreground">verdict at a glance</p>
           <p className="display text-lg font-bold" style={{ color: verdictColor }}>{verdict}</p>
-          <p className="mt-0.5 text-[12px] text-muted-foreground">{alerts.length ? `${alerts.length} alert${alerts.length === 1 ? "" : "s"} · peak priority ${topScore}/100 · ranks review order, not guilt` : "No detector flagged this account — absence of alerts is not proof of legitimacy."}</p>
+          <p className="mt-0.5 text-[12px] text-muted-foreground">{alerts.length ? `${alerts.length} alert${alerts.length === 1 ? "" : "s"} · peak priority ${Math.round(topScore)}/100 · ranks review order, not guilt` : "No detector flagged this account — absence of alerts is not proof of legitimacy."}</p>
         </div>
         {alerts.length > 0 && (
           <button onClick={() => setSim(true)} className={`${btnPrimary} ml-auto`}>

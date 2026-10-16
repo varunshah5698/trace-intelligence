@@ -44,7 +44,7 @@ function reportCards(ds: Dataset, evalNow: () => EvalResult | null): { label: st
       desc: "CSV inventory of every alert: rule, category, severity, review-priority score and the exact transfer ids behind it.",
       fmt: ".csv",
       icon: Table2,
-      fn: () => download(ds.name + "-alerts.csv", toCSV(ds.alerts.map((a) => ({ id: a.id, rule: a.ruleId, category: a.category, severity: a.severity, score: a.score, txns: a.txnIds.join(";") })))),
+      fn: () => download(ds.name + "-alerts.csv", toCSV(ds.alerts.map((a) => ({ id: a.id, rule: a.ruleId, category: a.category, severity: a.severity, score: Math.round(a.score), txns: a.txnIds.join(";") })))),
     },
     {
       label: "Alert evidence",
@@ -147,7 +147,7 @@ function fullMarkdown(ds: Dataset, e: EvalResult | null): string {
   L.push("", "## Highest-priority alerts (top 25)", "");
   top.forEach((a) => {
     L.push(`### ${a.id} — ${a.title}`);
-    L.push(`- Severity **${a.severity}** · review-priority ${a.score}/100 · rule \`${a.ruleId}\` (${a.category})`);
+    L.push(`- Severity **${a.severity}** · review-priority ${Math.round(a.score)}/100 · rule \`${a.ruleId}\` (${a.category})`);
     L.push(`- ${a.explanation}`);
     L.push(`- Evidence: ${a.evidence.map((ev) => `${ev.label}=${ev.value}`).join("; ")}`);
     L.push(`- Transfers: ${a.txnIds.join(", ")}`, "");

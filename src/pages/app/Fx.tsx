@@ -1,3 +1,4 @@
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { Card, FeedDown, PanelTitle, StatusDot, btnGhost, btnPrimary, inputCls } from "@/components/app/Shell";
 import { PAIRS, convert, fetchHistory, fetchLiveQuotes, type Quote } from "@/lib/trace/fx";
 import { download } from "@/lib/trace/store";
@@ -292,6 +293,36 @@ export function FxMarket() {
           </div>
         </Card>
       </div>
+
+      {/* ── AI analysis — North Mini interprets the selected pair ── */}
+      <AiAnalysis
+        key={sel}
+        auto
+        title={`AI analysis · ${sel}`}
+        sub="North Mini reads the quote, spread, and period statistics above"
+        task="FX pair market analysis"
+        question={`Analyse ${sel} over the last ${range} days for an FX operations desk: direction and magnitude of the trend, volatility, spread quality, anything unusual in the daily changes, and what this daily reference series cannot tell you.`}
+        context={{
+          pair: sel,
+          quote: q
+            ? { mid: q.mid, bid: q.bid, ask: q.ask, spreadBp: sprBp, state: q.state, source: q.source, sourceTime: q.sourceTime }
+            : { note: "no live quote right now" },
+          changeVsPreviousReference: chgPct !== null ? { absolute: chg, percent: Number(chgPct.toFixed(4)) } : null,
+          period: period
+            ? {
+                windowDays: range,
+                high: Number(period.hi.toFixed(4)),
+                low: Number(period.lo.toFixed(4)),
+                mean: Number(period.mean.toFixed(4)),
+                volatility: Number(period.vol.toFixed(4)),
+                changePct: Number(period.chgP.toFixed(4)),
+              }
+            : null,
+          dailyChangesPct: dailyBars.slice(-10).map((b) => ({ date: b.date, pct: Number(b.chg.toFixed(4)) })),
+          watchlist: watch,
+          dataNote: "ECB daily reference rates (not intraday); quote is the latest provider observation",
+        }}
+      />
 
       {/* ── Quote stream ─────────────────────────────────────── */}
       <Card>

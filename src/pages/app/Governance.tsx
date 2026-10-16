@@ -1,7 +1,10 @@
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { Card, Empty, Kpi, PanelTitle, SevBadge, ScoreBar, btnPrimary, num, shortId } from "@/components/app/Shell";
+import { api } from "@/convex/_generated/api";
 import { toCSV } from "@/lib/trace/csv";
 import { evaluate, type EvalResult } from "@/lib/trace/detect";
 import { download, getSelected, loadAll, type Dataset } from "@/lib/trace/store";
+import { useAction } from "convex/react";
 import { ClipboardList, Download, FileText, Gauge, ShieldAlert, Table2 } from "lucide-react";
 import { useMemo } from "react";
 import { Link } from "react-router";
@@ -12,16 +15,64 @@ import { Link } from "react-router";
 
 type IconT = typeof Download;
 
-function reportCards(ds: Dataset, evalNow: () => EvalResult | null): { label: string; desc: string; fmt: string; icon: IconT; fn: () => void; primary?: boolean; disabled?: boolean }[] {
+/** Shape the report panel and the model need — one source of truth for report context. */
+function reportContext(ds: Dataset, ev: EvalResult | null) {
+  const sev: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
+  ds.alerts.forEach((a) => { sev[a.severity] = (sev[a.severity] ?? 0) + 1; });
+  const rules = new Map<string, { n: number; cat: string }>();
+  ds.alerts.forEach((a) => rules.set(a.ruleId, { n: (rules.get(a.ruleId)?.n ?? 0) + 1, cat: a.category }));
+  const top = [...ds.alerts].sort((a, b) => b.score - a.score).slice(0, 5);
+  return {
+    dataset: {
+      name: ds.name, source: ds.source, tier: ds.tier, records: ds.txns.length,
+      period: { from: ds.report.minDate ?? null, to: ds.report.maxDate ?? null },
+    },
+    currencies: ds.report.currencies.map((c) => ({ code: c.code, count: c.n })),
+    channels: ds.report.channels.map((c) => ({ name: c.name, count: c.n })),
+    dataQuality: { warnings: ds.report.warnings },
+    alerts: {
+      total: ds.alerts.length,
+      bySeverity: sev,
+      byRule: [...rules.entries()]
+        .map(([id, x]) => ({ rule: id, alerts: x.n, category: x.cat }))
+        .sort((a, b) => b.alerts - a.alerts)
+        .slice(0, 7),
+    },
+    evaluation: ev
+      ? { precision: Number(ev.precision.toFixed(3)), recall: Number(ev.recall.toFixed(3)), f1: Number(ev.f1.toFixed(3)), tp: ev.tp, fp: ev.fp, fn: ev.fn }
+      : null,
+    topAlerts: top.map((a) => ({ id: a.id, title: a.title, severity: a.severity, score: Math.round(a.score), rule: a.ruleId, transfers: a.txnIds.length })),
+    policy: "alerts are review signals, not verdicts; currency values are never cross-summed",
+  };
+}
+
+type AnalyzeFn = (args: { task: string; context: string; question?: string }) => Promise<{ ok: boolean; text: string; error?: string }>;
+
+/** The report's executive analysis is written by North Mini — never a local template. */
+async function executiveAnalysis(run: AnalyzeFn, ds: Dataset, ev: EvalResult | null): Promise<string> {
+  try {
+    const res = await run({
+      task: "executive dataset analysis report",
+      context: JSON.stringify(reportContext(ds, ev)),
+      question: "Write the executive analysis for the top of this analyst report: headline risk, data-quality caveats, how far the evaluation results justify trust, and where review effort should go first. Markdown with a short opening verdict then ## sections.",
+    });
+    if (res.ok && res.text) return res.text;
+    return `> **Executive analysis unavailable:** ${res.error ?? "North Mini returned no text."}`;
+  } catch (e) {
+    return `> **Executive analysis unavailable:** ${e instanceof Error ? e.message : "request failed"}`;
+  }
+}
+
+function reportCards(ds: Dataset, evalNow: () => EvalResult | null, fullReport: () => void): { label: string; desc: string; fmt: string; icon: IconT; fn: () => void; primary?: boolean; disabled?: boolean }[] {
   const stamp = new Date().toISOString();
   return [
     {
       label: "Full analyst report",
-      desc: "One Markdown file: dataset metadata, quality profile, severity + per-rule summary, model evaluation, the 25 highest-priority alerts with full evidence, and the limitations section.",
+      desc: "One Markdown file: the North Mini executive analysis, dataset metadata, quality profile, severity + per-rule summary, model evaluation, the 25 highest-priority alerts with full evidence, and the limitations section.",
       fmt: ".md",
       icon: ClipboardList,
       primary: true,
-      fn: () => download(ds.name + "-full-report.md", fullMarkdown(ds, evalNow()), "text/markdown"),
+      fn: fullReport,
     },
     {
       label: "Data-quality profile",
@@ -112,7 +163,7 @@ function GaugeRow({ label, v }: { label: string; v: number }) {
 }
 
 /** Single Markdown report: metadata → quality → summary → evaluation → evidence → limits. */
-function fullMarkdown(ds: Dataset, e: EvalResult | null): string {
+function fullMarkdown(ds: Dataset, e: EvalResult | null, executive?: string): string {
   const stamp = new Date().toISOString();
   const sev: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
   ds.alerts.forEach((a) => { sev[a.severity] = (sev[a.severity] ?? 0) + 1; });
@@ -127,6 +178,7 @@ function fullMarkdown(ds: Dataset, e: EvalResult | null): string {
   L.push(`- **Currencies:** ${ds.report.currencies.map((c) => `${c.code} (${num(c.n)})`).join(", ") || "—"}`);
   L.push(`- **Channels:** ${ds.report.channels.map((c) => `${c.name} (${num(c.n)})`).join(", ") || "—"}`);
   L.push(`- **Generated:** ${stamp}`, "");
+  if (executive) L.push("## Executive analysis", "", executive, "");
   L.push("## Data quality", "");
   if (ds.report.warnings.length) ds.report.warnings.forEach((w) => L.push(`- ⚠ ${w}`));
   else L.push("- No warnings raised by the profiler.");
@@ -196,6 +248,7 @@ export default function Governance({ view }: { view: string }) {
 
 /** The full reports view: overview → KPIs → severity & rules → evaluation → inventory → exports. */
 function ReportStudio({ ds, ev }: { ds: Dataset; ev: EvalResult | null }) {
+  const analyze = useAction(api.ai.analyze);
   const sev: Record<string, number> = { critical: 0, high: 0, medium: 0, low: 0 };
   ds.alerts.forEach((a) => { sev[a.severity] = (sev[a.severity] ?? 0) + 1; });
   const ruleCounts = useMemo(() => {
@@ -204,7 +257,14 @@ function ReportStudio({ ds, ev }: { ds: Dataset; ev: EvalResult | null }) {
     return [...m.entries()].map(([id, x]) => ({ id, ...x })).sort((a, b) => b.n - a.n).slice(0, 7);
   }, [ds.alerts]);
   const topAlerts = useMemo(() => [...ds.alerts].sort((a, b) => b.score - a.score).slice(0, 10), [ds.alerts]);
-  const cards = reportCards(ds, () => ev);
+  // Full report download: North Mini writes the executive analysis, then the file ships.
+  const downloadFullReport = () => {
+    void (async () => {
+      const exec = await executiveAnalysis(analyze, ds, ev);
+      download(ds.name + "-full-report.md", fullMarkdown(ds, ev, exec), "text/markdown");
+    })();
+  };
+  const cards = reportCards(ds, () => ev, downloadFullReport);
   const risky = sev.critical + sev.high;
   const maxRule = Math.max(...ruleCounts.map((r) => r.n), 1);
 
@@ -215,7 +275,7 @@ function ReportStudio({ ds, ev }: { ds: Dataset; ev: EvalResult | null }) {
         <PanelTitle
           title="Report studio"
           sub="Every export is generated on click from the active dataset below — nothing is pre-rendered, and each file carries dataset, period, rule versions, currency policy, limitations and a generation timestamp."
-          right={<button onClick={() => download(ds.name + "-full-report.md", fullMarkdown(ds, ev), "text/markdown")} className={`${btnPrimary} shrink-0`}><Download className="mr-1 inline h-3.5 w-3.5" /> Full report (.md)</button>}
+          right={<button onClick={downloadFullReport} className={`${btnPrimary} shrink-0`}><Download className="mr-1 inline h-3.5 w-3.5" /> Full report (.md)</button>}
         />
         <div className="flex flex-wrap gap-1.5 px-5 pb-4 pt-3 text-xs">
           {([
@@ -245,6 +305,17 @@ function ReportStudio({ ds, ev }: { ds: Dataset; ev: EvalResult | null }) {
         <div className="rise rise-5"><Kpi label="Evaluation F1" value={ev ? ev.f1.toFixed(2) : "—"} sub={ev ? `precision ${ev.precision.toFixed(2)} · recall ${ev.recall.toFixed(2)}` : "no ground truth on uploads"} accent="var(--teal)" /></div>
         <div className="rise rise-6"><Kpi label="Records analysed" value={num(ds.txns.length)} sub={`${num(ds.alerts.flatMap((a) => a.txnIds).length)} alert-linked transfers`} /></div>
       </div>
+
+      {/* AI analysis — North Mini writes the report's reading of this dataset */}
+      <AiAnalysis
+        key={ds.id}
+        auto
+        title="AI analysis · executive read"
+        sub="North Mini reads the report figures above — this text also tops the exported .md report"
+        task="executive dataset analysis report"
+        question="Give the report owner the executive read: headline risk, data-quality caveats, how far the evaluation results justify trust, and where review effort should go first."
+        context={reportContext(ds, ev)}
+      />
 
       {/* severity mix + top rules */}
       <div className="grid gap-3 xl:grid-cols-2">

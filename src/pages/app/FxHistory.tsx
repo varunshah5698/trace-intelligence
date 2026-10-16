@@ -1,3 +1,4 @@
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { Card, PanelTitle, Skeleton, StatusDot, btnGhost, inputCls } from "@/components/app/Shell";
 import { PAIRS, fetchHistory, fetchLiveQuotes } from "@/lib/trace/fx";
 import { download } from "@/lib/trace/store";
@@ -111,6 +112,29 @@ export default function FxHistory() {
           ))}
         </div>
       )}
+
+      {/* ── AI analysis — North Mini interprets this history ── */}
+      <AiAnalysis
+        key={`${pair}-${days}`}
+        auto
+        title={`AI analysis · ${pair} history`}
+        sub="North Mini reads the period statistics and daily changes above"
+        task="FX rate history analysis"
+        question={`Analyse the ${pair} reference series over ${days} days: trend and turning points, range behaviour around the ${stats ? stats.min.date : "low"} low and ${stats ? stats.max.date : "high"} high, volatility, and what a daily ECB reference series cannot tell an FX trader.`}
+        context={{
+          pair,
+          windowDays: days,
+          observations: rows.length,
+          range: rows.length ? { from: rows[0].date, to: rows[rows.length - 1].date } : null,
+          latest: stats ? { date: stats.last.date, rate: stats.last.rate } : null,
+          periodChangePct: chg !== null ? Number(chg.toFixed(4)) : null,
+          high: stats ? { date: stats.max.date, rate: stats.max.rate } : null,
+          low: stats ? { date: stats.min.date, rate: stats.min.rate } : null,
+          recentDailyChangesPct: dailyBars.slice(-10).map((b) => ({ date: b.date, pct: Number(b.chg.toFixed(4)) })),
+          liveQuote: live.data ? { state: live.data.state, provider: live.data.provider } : null,
+          dataNote: "ECB daily reference rates via Frankfurter — not intraday ticks",
+        }}
+      />
 
       {/* ── Chart / table ────────────────────────────────────── */}
       <Card>

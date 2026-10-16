@@ -1,3 +1,4 @@
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, SevBadge, emit, fmtBig, num, shortId } from "@/components/app/Shell";
 import { api } from "@/convex/_generated/api";
 import { useQuery } from "convex/react";
@@ -17,6 +18,8 @@ export default function Overview() {
   const [cur, setCur] = useState("");
   const [cat, setCat] = useState("");
   const [range, setRange] = useState("all");
+  // Analysis window anchor: computed once so date filters don't drift between renders.
+  const [now] = useState(() => Date.now());
   const [metric, setMetric] = useState<"count" | "value">("count");
   useEffect(() => {
     const f = () => setTick((t) => t + 1);
@@ -37,11 +40,11 @@ export default function Overview() {
     if (cur) t = t.filter((x) => x.currency === cur);
     if (range !== "all") {
       const days = Number(range);
-      const cut = Date.now() - days * 86400e3;
+      const cut = now - days * 86400e3;
       t = t.filter((x) => x.epoch >= cut);
     }
     return t;
-  }, [ds, scope, cur, range]);
+  }, [ds, scope, cur, range, now]);
 
   const alerts = useMemo(() => {
     if (!ds) return [];
@@ -109,6 +112,22 @@ export default function Overview() {
     ];
   }, [txns, ds]);
 
+  // Entity risk ranking: how many alerts mention each account, worst severity wins.
+  // (Declared before any early return — hooks must run unconditionally.)
+  const entityRisk = useMemo(() => {
+    const m = new Map<string, { n: number; worst: number }>();
+    alerts.forEach((a) => {
+      const w = a.severity === "critical" ? 3 : a.severity === "high" ? 2 : a.severity === "medium" ? 1 : 0;
+      a.entities.forEach((en) => {
+        const e = m.get(en) ?? { n: 0, worst: 0 };
+        e.n++; e.worst = Math.max(e.worst, w); m.set(en, e);
+      });
+    });
+    const names = (["low", "medium", "high", "critical"] as const);
+    return [...m.entries()].map(([id, e]) => ({ id, n: e.n, sev: names[e.worst], worst: e.worst }))
+      .sort((a, b) => b.worst - a.worst || b.n - a.n);
+  }, [alerts]);
+
   if (!ds) {
     return (
       <Card>
@@ -130,20 +149,6 @@ export default function Overview() {
 
   const currencies = [...new Set(ds.txns.map((t) => t.currency))];
   const categories = [...new Set(ds.alerts.map((a) => a.category))];
-  // Entity risk ranking: how many alerts mention each account, worst severity wins.
-  const entityRisk = useMemo(() => {
-    const m = new Map<string, { n: number; worst: number }>();
-    alerts.forEach((a) => {
-      const w = a.severity === "critical" ? 3 : a.severity === "high" ? 2 : a.severity === "medium" ? 1 : 0;
-      a.entities.forEach((en) => {
-        const e = m.get(en) ?? { n: 0, worst: 0 };
-        e.n++; e.worst = Math.max(e.worst, w); m.set(en, e);
-      });
-    });
-    const names = (["low", "medium", "high", "critical"] as const);
-    return [...m.entries()].map(([id, e]) => ({ id, n: e.n, sev: names[e.worst], worst: e.worst }))
-      .sort((a, b) => b.worst - a.worst || b.n - a.n);
-  }, [alerts]);
   const COLORS = ["#8B5CF6", "#2DD4BF", "#FBBF24", "#FB7185", "#60A5FA", "#EC4899"];
 
   const seg = "px-3 py-1.5 capitalize transition-colors";
@@ -174,6 +179,27 @@ export default function Overview() {
       </div>
 
       {/* KPI row */}
+      {/* AI analysis — North Mini interprets every figure on this page */}
+      <AiAnalysis
+        auto
+        title="AI analysis · portfolio risk"
+        sub="North Mini reads this page's actual figures and writes the analysis"
+        task="portfolio risk overview"
+        question={`Give a compliance officer the risk posture for the "${scope}" scope (range: ${range}, currency: ${cur || "all"}, category: ${cat || "all"}) — what stands out, what it could mean, and what the data cannot prove.`}
+        context={{
+          dataset: { name: ds.name, tier: ds.tier, source: ds.source },
+          filters: { scope, range, currency: cur || "all", category: cat || "all" },
+          transactions: { total: txns.length, domestic: domIntl[0].n, crossBorder: domIntl[1].n },
+          currencies: byCur.slice(0, 6).map((r) => ({ currency: r.c, count: r.n, value: r.v })),
+          channels: byCh.slice(0, 6).map((r) => ({ channel: r.c, count: r.n })),
+          alerts: { total: alerts.length, bySeverity: bySev, byCategory: byCat, highPriority: hi.length },
+          connectedEntities: accts.size,
+          entitiesUnderReview: entityRisk.slice(0, 6).map((e) => ({ entity: shortId(e.id), mentions: e.n, severity: e.sev })),
+          last7Days: trend.slice(-7).map((b) => ({ date: b.d, transactions: b.n, flagged: b.f, highPriority: b.h })),
+          openInvestigations: openInv,
+        }}
+      />
+
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-3 2xl:grid-cols-6">
         <div className="rise rise-1"><Kpi label="Transactions Analysed" value={num(txns.length)} sub={`tier ${ds.tier} · ${ds.source}`} spark={volSpark} /></div>
         <div className="rise rise-2"><Kpi label="Detection Alerts" value={num(alerts.length)} sub={`${byCat.length} categories`} spark={alertSpark} accent="var(--warning)" /></div>

@@ -1,3 +1,4 @@
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { Card, Empty, PanelTitle, RiskCharacter, SevBadge, Sparkline, btnGhost, btnPrimary, emit, fmtAxis, num, shortId } from "@/components/app/Shell";
 import { download, getSelected, loadAll, saveAll } from "@/lib/trace/store";
 import { toCSV, type NormalizedTxn } from "@/lib/trace/csv";
@@ -71,7 +72,8 @@ function ScoreRing({ score: rawScore, size = 92, animate = true }: { score: numb
 
 export default function Detections() {
   const { id } = useParams();
-  if (id) return <Workbench id={id} />;
+  // key={id} remounts the workbench so the AI brief re-runs per alert.
+  if (id) return <Workbench key={id} id={id} />;
   return <Explorer />;
 }
 
@@ -539,6 +541,12 @@ function Workbench({ id }: { id: string }) {
     else toast.warning("Note saved on this device", { description: "Backend unreachable — it will sync when the connection returns." });
   }
 
+  // Currency rollup of the implicated transfers — input for the AI brief.
+  const aiTotals = [...new Set(txns.map((t) => t.currency))].map((c) => {
+    const rows = txns.filter((t) => t.currency === c);
+    return { currency: c, count: rows.length, total: rows.reduce((s, t) => s + t.amount, 0) };
+  });
+
   const fade = (delay: number) => (reduce ? {} : {
     initial: { opacity: 0, y: 16 },
     animate: { opacity: 1, y: 0 },
@@ -603,6 +611,36 @@ function Workbench({ id }: { id: string }) {
             <PanelTitle title="Detection explanation" sub="What the rule saw, in plain language" />
             <p className="px-4 pt-2 text-[13px] leading-6 text-muted-foreground">{a.explanation}</p>
           </Card>
+
+          {/* AI investigation brief — North Mini analyses this alert */}
+          <AiAnalysis
+            auto
+            title="AI analysis · investigator brief"
+            sub="North Mini reviews this alert, its evidence, and the entities' full activity"
+            task="detection alert investigation"
+            question="Write the investigator brief: what happened and why it scored this severity, the strongest benign explanation, what the data cannot prove, and the recommended next step."
+            context={{
+              alert: {
+                id: a.id, title: a.title, category: a.category, severity: a.severity,
+                score: a.score, rule: a.ruleId, window: window_,
+                explanation: a.explanation,
+                mayBeLegitimate: a.legitimate,
+                cannotTellYou: a.limitations,
+              },
+              dataset: { name: d.name, tier: d.tier, transactions: d.txns.length, alerts: d.alerts.length },
+              evidence: a.evidence.map((e) => ({ label: e.label, value: e.value })),
+              implicatedTransfers: { count: txns.length, byCurrency: aiTotals },
+              entities: people.map((p) => ({
+                entity: shortId(p.id), sent: p.sent, received: p.recv,
+                outValue: Math.round(p.out), inValue: Math.round(p.in), peers: p.cps,
+                alertHits: p.alertHits,
+                flow: p.out > p.in ? "net sender" : p.in > p.out ? "net receiver" : "balanced",
+                activeDays: p.series.length,
+              })),
+              resolution: { entitiesFoundInDataset: entitiesResolved, of: a.entities.length },
+              reviewerNotes: ns.length,
+            }}
+          />
 
           {/* graphical analysis — follow-the-money trail + amount context */}
           <Card className="p-5">

@@ -1,3 +1,4 @@
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { Card, Empty, Kpi, PanelTitle, RiskCharacter, ScoreBar, btnPrimary, fmtBig, inputCls, num, riskLevel, shortId } from "@/components/app/Shell";
 import { FraudSim } from "@/components/app/FraudSim";
 import { getSelected, loadAll } from "@/lib/trace/store";
@@ -9,7 +10,8 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 
 export default function Entities() {
   const { id } = useParams();
-  if (id) return <Profile id={decodeURIComponent(id)} />;
+  // key remounts the profile so the AI analysis re-runs per entity.
+  if (id) return <Profile key={id} id={decodeURIComponent(id)} />;
   return <List />;
 }
 
@@ -73,6 +75,30 @@ function List() {
         <div className="rise rise-5"><Kpi label="Intl legs" value={num(stats.intlLegs)} sub="transfers crossing a border" accent="var(--primary)" /></div>
         <div className="rise rise-6"><Kpi label="Top hub" value={stats.hub ? shortId(stats.hub.id) : "—"} sub={stats.hub ? `${num(stats.hub.n)} transfers` : "no data"} accent="var(--warning)" /></div>
       </div>
+
+      {/* AI analysis — North Mini reads the entity inventory above */}
+      <AiAnalysis
+        auto
+        title="AI analysis · entity inventory"
+        sub="North Mini reads the entity stats and risk split on this page"
+        task="entity inventory risk overview"
+        question="Summarise what the entity inventory says about network risk: concentration, alert linkage, cross-border exposure, and where an analyst should look first."
+        context={{
+          dataset: ds.name,
+          entities: stats.total,
+          alertLinked: stats.flaggedN,
+          clean: stats.clean,
+          transfers: stats.transfers,
+          internationalLegs: stats.intlLegs,
+          topHub: stats.hub ? { entity: shortId(stats.hub.id), transfers: stats.hub.n } : null,
+          currentFilter: { search: q || "none", risk: riskF || "all", sort },
+          topRows: rows.slice(0, 10).map((e) => ({
+            entity: shortId(e.id), transfers: e.n, counterparties: e.peers.size,
+            international: e.intl, risk: worstOf.get(e.id) ?? "clean",
+          })),
+        }}
+      />
+
       <div className="flex flex-wrap items-center gap-2">
         <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search entities…" className={`${inputCls} w-56`} aria-label="Search entities" />
         <select value={riskF} onChange={(e) => setRiskF(e.target.value)} className="rounded-lg border border-input bg-[color:var(--glass-hi)] px-2.5 py-1.5 text-xs" aria-label="Filter by risk">
@@ -188,6 +214,35 @@ function Profile({ id }: { id: string }) {
           </button>
         )}
       </Card>
+
+      {/* AI analysis — North Mini profiles this entity */}
+      <AiAnalysis
+        auto
+        title="AI analysis · entity profile"
+        sub="North Mini reads this account's flows, counterparties, and alerts"
+        task="entity profile analysis"
+        question="Profile this entity for an investigator: behavioural pattern from the flows, why it carries this verdict, the most plausible innocent explanation, and the recommended next check."
+        context={{
+          entity: shortId(id),
+          dataset: ds.name,
+          verdict,
+          worstSeverity: worstSev,
+          peakAlertScore: topScore,
+          transfers: tx.length,
+          inbound: Math.round(inn),
+          outbound: Math.round(out),
+          meanTransfer: Math.round(mean),
+          netFlow: inn > out ? "net receiver" : out > inn ? "net sender" : "balanced",
+          counterparties: peers.size,
+          activeDays: buckets.size,
+          currencies,
+          topCounterparties: orbitPeers.map((p) => ({ entity: shortId(p.id), transfers: p.n, flagged: p.hot })),
+          alerts: alerts.map((a) => ({ id: a.id, title: a.title, severity: a.severity, score: a.score, category: a.category })),
+          reviewNotes: notes.length,
+          dataNote: "attributes imported from the dataset — links inferred from transfers, never verified",
+        }}
+      />
+
       <div className="grid gap-3 xl:grid-cols-3">
         <Card className="p-5 xl:col-span-2">
           <p className="mono text-[11px] text-muted-foreground">ENTITY · provenance: imported from “{ds.name}” (inferred links marked as such)</p>

@@ -1,7 +1,7 @@
 import { Card, Empty, PanelTitle, WarnStrip, btnGhost, btnPrimary, emit, inputCls, num } from "@/components/app/Shell";
 import { buildMapping, inferMapping, normalize, parseCSV, readiness, type FieldMapping, type NormalizedTxn, type QualityReport, type SemanticField } from "@/lib/trace/csv";
 import { DEFAULT_RULES, runDetection, type RuleConfig } from "@/lib/trace/detect";
-import { generate } from "@/lib/trace/synthetic";
+import { generate, generateBalanced } from "@/lib/trace/synthetic";
 import { download, loadAll, saveAll, setSelected, type Dataset } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";
 import { prepareTable } from "@/lib/trace/prepare";
@@ -104,6 +104,23 @@ export default function Datasets() {
     };
     saveAll([ds, ...loadAll()]); setSelected(ds.id); emit(); refresh(); nav(`/datasets/${ds.id}`);
   }
+  function loadRiskGraded() {
+    const { txns, manifest, personas } = generateBalanced();
+    const cols = Object.keys(txns[0].raw);
+    const t = { columns: cols, rows: txns.map((x) => x.raw as Record<string, string>), delimiter: ",", encodingNote: "" };
+    const m = inferMapping(t);
+    const c2f: Record<string, string> = {};
+    m.forEach((x) => { c2f[x.column] = x.field ?? ""; });
+    const norm = normalize(t, buildMapping(c2f as never));
+    const alerts = announceAnalysis("risk-graded sample", runDetection(norm.txns, DEFAULT_RULES.map((x) => ({ ...x }))));
+    const ds: Dataset = {
+      id: `ds-${Date.now().toString(36)}`, name: "Risk-graded sample (clean · low · medium · high)", source: "demo",
+      createdAt: new Date().toISOString(), columns: cols, mappings: m, col2field: c2f,
+      txns: norm.txns, report: norm.report, alerts, rules: DEFAULT_RULES.map((x) => ({ ...x })),
+      manifest: { ...manifest, personas }, tier: 1,
+    };
+    saveAll([ds, ...loadAll()]); setSelected(ds.id); emit(); refresh(); nav(`/datasets/${ds.id}`);
+  }
 
   if (wizard) return <Wizard w={wizard} setW={setWizard} onDone={(ds) => { refresh(); nav(`/datasets/${ds.id}`); }} saveRemote={saveRemote} />;
 
@@ -111,7 +128,9 @@ export default function Datasets() {
     <div className="space-y-3">
       <UploadCard onDone={(w) => setWizard(w)} />
       <div className="flex flex-wrap items-center gap-2 text-[13px]">
+        <button onClick={loadRiskGraded} className={btnPrimary}>Use risk-graded sample</button>
         <button onClick={loadDemo} className={btnGhost}>Use generated sample</button>
+        <span className="text-xs text-muted-foreground">Risk-graded = a majority of clean / low-risk accounts, one planted case per detector rule, and a verified persona manifest (open it under Scenario manifest).</span>
       </div>
       <Card>
         <PanelTitle title={`Dataset Library (${list.length})`} sub="Ownership is per-browser in this build; deletion is permanent." />

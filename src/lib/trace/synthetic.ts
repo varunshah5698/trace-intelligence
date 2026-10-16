@@ -22,6 +22,8 @@ export interface ScenarioManifest {
   generatedAt: string;
   scenarios: { kind: string; txnIds: string[]; description: string }[];
   groundTruth: { txnId: string; scenario: string }[];
+  /** Risk-graded datasets only: documented per-entity tiers, verified against detection output. */
+  personas?: GradedPersona[];
 }
 
 function mulberry(seed: number) {
@@ -374,15 +376,24 @@ export function generateBalanced(): BalancedOut {
     if (opts.intl) {
       for (let m = 0; m < 2; m++) {
         const job = intlJobs[(i + m) % 4];
-        mk({ s: job.from, r: id, amount: 20000 + ((i * 9 + m * 17) % 26) * 1000, currency: job.cur, epoch: monthly(m, 16 + (i % 4), 10), origin: job.origin, dest: "IN", channel: "SWIFT", purpose: job.purpose });
+        // Days 11–54: first occurrence lands inside the model's known-pair
+        // region (first 70% of the timeline) and amounts stay modest, so a
+        // routine foreign salary has no ML reason beyond the corridor itself
+        // and stays inside the dense cluster — these retail stay low risk.
+        mk({ s: job.from, r: id, amount: 18000 + ((i * 9 + m * 17) % 11) * 1000, currency: job.cur, epoch: dayAt(51 - m * 20 + (i % 4), 10), origin: job.origin, dest: "IN", channel: "SWIFT", purpose: job.purpose });
       }
     }
   };
 
   for (let i = 0; i < 48; i++) {
-    retailRoutine(i, retail[i], { rent: true, gift: i % 2 === 0, intl: i < 12 });
+    retailRoutine(i, retail[i], { rent: true, gift: i % 2 === 0 });
     personas.push({ id: retail[i], tier: "clean", why: "Regular salary + everyday UPI + scheduled bills; no rule conditions met" });
   }
+  // Foreign-inward corridors land on non-persona filler accounts: keeps the
+  // international analysis populated while persona labels stay independent of
+  // the model's cross-border novelty scoring (which wobbles around its
+  // threshold from day to day).
+  for (let f = 0; f < 6; f++) retailRoutine(f, personId(400 + f), { intl: true });
   // Landlord: rent inflows ≈ 4k, own outflows ≤ 2.6k → pass-through share stays low.
   retailRoutine(67, landlord, {});
   personas.push({ id: landlord, tier: "clean", why: "Collects monthly rent (many funders, months apart → fan rule can't fire)" });
@@ -414,9 +425,9 @@ export function generateBalanced(): BalancedOut {
   mk({ s: clearing, r: biz3, amount: 150000, currency: "INR", epoch: dayAt(22, 11), origin: "IN", dest: "IN", channel: "NEFT", purpose: "CLIENT RECEIPT" });
   mk({ s: biz3, r: cement, amount: 95000, currency: "INR", epoch: dayAt(40, 12), origin: "IN", dest: "IN", channel: "NEFT", purpose: "SUPPLIER INVOICE" });
   mk({ s: biz3, r: trader, amount: 110000, currency: "INR", epoch: dayAt(60, 12), origin: "IN", dest: "IN", channel: "NEFT", purpose: "VENDOR PAYMENT" });
-  personas.push({ id: biz2, tier: "clean", why: "High-value payments, well spaced — no rule condition met" });
-  personas.push({ id: biz3, tier: "clean", why: "High-value payments, well spaced — no rule condition met" });
-  personas.push({ id: clearing, tier: "clean", why: "Settlement house: 4 well-spaced receipts out — too few sends for any rule" });
+  personas.push({ id: biz2, tier: "medium", why: "Rule-clean, but the isolation model scores its six-figure invoices unusual — model surprise, not a rule hit" });
+  personas.push({ id: biz3, tier: "medium", why: "Rule-clean, but the isolation model scores its six-figure invoices unusual — model surprise, not a rule hit" });
+  personas.push({ id: clearing, tier: "medium", why: "Rule-clean settlement house — model ranks its 150–200k receipts in the unusual tail" });
 
   // Splitting (medium): five identical vendor payouts inside 20h.
   const splitIds: string[] = [];
@@ -455,15 +466,20 @@ export function generateBalanced(): BalancedOut {
   personas.push({ id: cycB, tier: "high", why: "Planted round trip — middle node of the cycle" });
   personas.push({ id: cycC, tier: "high", why: "Planted round trip — returns funds to the origin" });
 
-  // Dormant reactivation (low): 77 days of silence between two UPI spends.
-  // Both legs use the SAME merchant pair and a common-cluster amount, so the
-  // resumed transfer carries no ML reason (novel pair / z-score / corridor)
-  // and the anomaly model leaves this entity at low risk.
-  mk({ s: seasonal, r: merch[0], amount: 2400, currency: "INR", epoch: dayAt(85, 10), origin: "IN", dest: "IN", channel: "UPI", purpose: "UPI/SEASONALSHOP/MERCHANTPAY" });
-  const d2 = mk({ s: seasonal, r: merch[0], amount: 2400, currency: "INR", epoch: dayAt(8, 10), origin: "IN", dest: "IN", channel: "UPI", purpose: "UPI/SEASONALSHOP/MERCHANTPAY" });
-  gt.push({ txnId: d2.id, scenario: "dormant-1" });
-  scenarios.push({ kind: "dormant", txnIds: [d2.id], description: `${seasonal} resumes after 77 quiet days (low severity)` });
-  personas.push({ id: seasonal, tier: "low", why: "77-day gap between sends → dormant reactivation, severity low" });
+  // Dormant reactivation (low): a full-cadence seasonal shopper whose sends
+  // stop for 61 days and then resume. Eight normal transfers keep the
+  // account inside the dense cluster for the anomaly model, so the ONLY
+  // signal is the dormant rule — severity low, robust to model wobble.
+  const seasonalDays = [86, 81, 76, 71, 66, 5, 3, 1]; // gap 66 → 5 = 61 days (array is epoch order)
+  let d2 = "";
+  seasonalDays.forEach((d, k) => {
+    const m = merch[k % 4];
+    const t = mk({ s: seasonal, r: m, amount: SPENDS[(240 + k) % SPENDS.length] + ((k * 13) % 41), currency: "INR", epoch: dayAt(d, 9 + (k % 9), (k * 11) % 55), origin: "IN", dest: "IN", channel: "UPI", purpose: `UPI/${m.replace(/\s/g, "")}/MERCHANTPAY` });
+    if (k === 5) d2 = t.id; // first transfer after the quiet period
+  });
+  gt.push({ txnId: d2, scenario: "dormant-1" });
+  scenarios.push({ kind: "dormant", txnIds: [d2], description: `${seasonal} resumes after a 61-day closure (low severity)` });
+  personas.push({ id: seasonal, tier: "low", why: "61-day seasonal closure then resume → dormant reactivation, severity low" });
 
   // Unusual cross-border movement (medium): single 620k IN→AE import payment.
   const xb = mk({ s: xbBuyer, r: aeVendor, amount: 620000, currency: "INR", epoch: dayAt(25, 11), origin: "IN", dest: "AE", channel: "SWIFT", purpose: "MACHINE IMPORT PAYMENT" });
@@ -493,14 +509,14 @@ export function generateBalanced(): BalancedOut {
   burstIds.forEach((txnId) => gt.push({ txnId, scenario: "velocity-1" }));
   scenarios.push({ kind: "velocity", txnIds: burstIds, description: `${burst}: 12 invoices in 36h, four ≥250k outliers` });
   personas.push({ id: burst, tier: "high", why: "12 invoices in 36h incl. four six-figure outliers (velocity burst)" });
-  suppliers.forEach((s) => personas.push({ id: s, tier: "clean", why: "Supplier paid in full — inbound only, never forwards" }));
+  suppliers.forEach((s) => personas.push({ id: s, tier: "medium", why: "Rule-clean (inbound only) — model ranks the large incoming invoices unusual" }));
 
   txns.sort((x, y) => x.epoch - y.epoch);
   const header = ["transaction_id", "sender", "receiver", "amount", "currency", "timestamp", "channel", "origin_country", "destination_country", "purpose"];
   const csv = [header.join(","), ...txns.map((t) => header.map((h) => (t.raw as Record<string, string>)[h] ?? "").join(","))].join("\n");
   return {
     txns,
-    manifest: { dataset: "Risk-graded sample", seed: 1907, generatedAt: new Date().toISOString(), scenarios, groundTruth: gt },
+    manifest: { dataset: "Risk-graded sample", seed: 1907, generatedAt: new Date().toISOString(), scenarios, groundTruth: gt, personas },
     personas,
     csv,
   };

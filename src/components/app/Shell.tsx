@@ -16,8 +16,8 @@ import { Link, NavLink, useLocation, useNavigate } from "react-router";
 import { emit } from "./ui";
 export * from "./ui";
 
-const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof LayoutDashboard }[] }[] = [
-  { head: "Overview", items: [{ to: "/", label: "Back to Home", icon: House }, { to: "/dashboard", label: "Intelligence Dashboard", icon: LayoutDashboard }] },
+const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof LayoutDashboard; end?: boolean }[] }[] = [
+  { head: "Overview", items: [{ to: "/", label: "Back to Home", icon: House, end: true }, { to: "/dashboard", label: "Intelligence Dashboard", icon: LayoutDashboard }] },
   {
     head: "Monitoring",
     items: [
@@ -32,7 +32,7 @@ const SECTIONS: { head: string; items: { to: string; label: string; icon: typeof
   {
     head: "FX",
     items: [
-      { to: "/fx", label: "FX Market", icon: Coins },
+      { to: "/fx", label: "FX Market", icon: Coins, end: true },
       { to: "/fx/history", label: "FX History", icon: History },
     ],
   },
@@ -155,7 +155,7 @@ export function Shell({ children, title, sub }: { children: React.ReactNode; tit
             <div className="space-y-0.5">
               {s.items.map((n) => (
                 <NavLink
-                  key={n.to} to={n.to} title={n.label}
+                  key={n.to} to={n.to} title={n.label} end={n.end}
                   className={({ isActive }) =>
                     `group relative flex items-center gap-2.5 rounded-lg px-2.5 py-[7px] text-[13px] font-medium transition-all duration-200 ${
                       isActive

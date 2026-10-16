@@ -23,7 +23,6 @@ const Transactions = lazy(() => import("./pages/app/Transactions.tsx"));
 const Network = lazy(() => import("./pages/app/Network.tsx"));
 const FundFlows = lazy(() => import("./pages/app/FundFlows.tsx"));
 const FxMarket = lazy(() => import("./pages/app/Fx.tsx").then((m) => ({ default: m.FxMarket })));
-const FxConverter = lazy(() => import("./pages/app/Fx.tsx").then((m) => ({ default: m.FxConverter })));
 const FxHistoryPage = lazy(() => import("./pages/app/FxHistory.tsx"));
 const Entities = lazy(() => import("./pages/app/Entities.tsx"));
 const Cases = lazy(() => import("./pages/app/Cases.tsx"));
@@ -113,7 +112,7 @@ createRoot(document.getElementById("root")!).render(
                   <Route path="/detections/:id" element={<App title="Alert Investigation Workbench" sub="Evidence, timeline, graph, and review actions."><Detections /></App>} />
                   <Route path="/network" element={<App title="Entity Network Explorer" sub="Interactive account and counterparty relationships."><Network /></App>} />
                   <Route path="/fund-flows" element={<App title="Fund Flow Explorer" sub="Evidence-backed directed payment sequences."><FundFlows /></App>} />
-                  <Route path="/fx" element={<App title="FX Market" sub="Live currency pairs, bid/ask spreads, watchlist, and a conversion workbench."><div className="space-y-3"><FxMarket /><FxConverter /></div></App>} />
+                  <Route path="/fx" element={<App title="FX Market" sub="Live currency pairs, spreads, watchlist, and detailed pair analysis."><FxMarket /></App>} />
                   <Route path="/fx/history" element={<App title="FX Rate History" sub="Daily reference rates: charts, period statistics, and CSV exports."><FxHistoryPage /></App>} />
                   <Route path="/entities" element={<App title="Entity Intelligence" sub="Searchable accounts, companies, and counterparties."><Entities /></App>} />
                   <Route path="/entities/:id" element={<App title="Entity Intelligence Profile" sub="History, baselines, alerts, and relationships."><Entities /></App>} />

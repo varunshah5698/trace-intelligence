@@ -1,4 +1,4 @@
-import { Card, Empty, FeedDown, PanelTitle, StatusDot, btnGhost, btnPrimary, inputCls } from "@/components/app/Shell";
+import { Card, FeedDown, PanelTitle, StatusDot, btnGhost, btnPrimary, inputCls } from "@/components/app/Shell";
 import { PAIRS, convert, fetchHistory, fetchLiveQuotes, type Quote } from "@/lib/trace/fx";
 import { download } from "@/lib/trace/store";
 import { toCSV } from "@/lib/trace/csv";

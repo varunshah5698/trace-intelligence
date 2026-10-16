@@ -1,15 +1,17 @@
 import { Card, Empty, PanelTitle, WarnStrip, btnGhost, btnPrimary, emit, inputCls, num } from "@/components/app/Shell";
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { buildMapping, inferMapping, normalize, parseCSV, readiness, type FieldMapping, type NormalizedTxn, type QualityReport, type SemanticField } from "@/lib/trace/csv";
 import { DEFAULT_RULES, runDetection, type RuleConfig } from "@/lib/trace/detect";
 import { generate, generateBalanced } from "@/lib/trace/synthetic";
 import { download, getSelected, loadAll, saveAll, setSelected, type Dataset } from "@/lib/trace/store";
+import { libraryDossier } from "@/lib/trace/dossier";
 import { toCSV } from "@/lib/trace/csv";
 import { prepareTable } from "@/lib/trace/prepare";
 import { announceAnalysis } from "@/lib/trace/ml";
 import { api } from "@/convex/_generated/api";
 import { useMutation } from "convex/react";
 import { ArrowLeft, ArrowRight, CheckCircle2, FileUp, Layers, Sparkles, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router";
 
 const FIELD_OPTS: (SemanticField | "")[] = ["", "txn_id", "sender", "receiver", "amount", "currency", "timestamp", "origin_country", "dest_country", "channel", "purpose", "status", "ignore"];
@@ -133,6 +135,8 @@ export default function Datasets() {
   }
 
   const activeId = getSelected();
+  const dossier = useMemo(() => libraryDossier(list, activeId), [list, activeId]);
+  const dossierKey = list.map((d) => d.id).join("|");
 
   if (wizard) return <Wizard w={wizard} setW={setWizard} onDone={(ds) => { refresh(); nav(`/datasets/${ds.id}`); }} saveRemote={saveRemote} />;
 
@@ -236,6 +240,15 @@ export default function Datasets() {
           )}
         </div>
       </Card>
+      <AiAnalysis
+        key={dossierKey}
+        auto
+        followUp
+        task="AI library brief across all datasets (synthetic and uploaded)"
+        context={dossier}
+        title="North Mini library brief"
+        sub="A read of every dataset on this screen — records, risk spread and data quality, computed from the actual rows"
+      />
     </div>
   );
 }

@@ -1,6 +1,8 @@
+import { AiAnalysis } from "@/components/app/AiAnalysis";
 import { Card, PanelTitle, WarnStrip, btnGhost, btnPrimary, emit, num } from "@/components/app/Shell";
 import { toCSV } from "@/lib/trace/csv";
 import { runDetection } from "@/lib/trace/detect";
+import { datasetDossier } from "@/lib/trace/dossier";
 import { download, loadAll, saveAll, setSelected } from "@/lib/trace/store";
 import { ArrowLeft, Download, Play } from "lucide-react";
 import { useMemo, useState } from "react";
@@ -11,7 +13,10 @@ export default function DatasetDetail() {
   const [v, setV] = useState(0);
   const ds = useMemo(() => loadAll().find((d) => d.id === id), [id, v]);
   const [tab, setTab] = useState<"rows" | "quality" | "manifest">("rows");
-  if (!ds) return <Card className="p-8 text-sm">Dataset not found. <Link to="/datasets" className="underline">Back</Link></Card>;
+  // Full dataset dossier (profile, flows, alerts, rows, ground truth) — the
+  // context North Mini analyses. Declared before the early return (hooks rules).
+  const dossier = useMemo(() => (ds ? datasetDossier(ds) : null), [ds]);
+  if (!ds || !dossier) return <Card className="p-8 text-sm">Dataset not found. <Link to="/datasets" className="underline">Back</Link></Card>;
   const r = ds.report;
 
   function rerun() {
@@ -45,6 +50,16 @@ export default function DatasetDetail() {
           <div key={k} className="rounded-lg border border-border bg-card px-4 py-3"><p className="text-[11px] uppercase tracking-wider text-muted-foreground">{k}</p><p className="tnum mt-0.5 truncate text-sm font-bold">{x}</p></div>
         ))}
       </div>
+
+      <AiAnalysis
+        key={`${ds.id}-${v}`}
+        auto
+        followUp
+        task={`deep analysis of the dataset "${ds.name}"`}
+        context={dossier}
+        title="North Mini dataset analysis"
+        sub="Profiled from this dataset's actual rows, quality report, detection output and ground-truth manifest — every figure verified against the data"
+      />
 
       <div className="flex flex-wrap gap-1 border-b border-border text-[13px]">
         {(["rows", "quality", "manifest"] as const).map((t) => (

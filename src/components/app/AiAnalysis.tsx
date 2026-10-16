@@ -1,19 +1,29 @@
 import { api } from "@/convex/_generated/api";
 import { cn } from "@/lib/utils";
 import { useAction } from "convex/react";
-import { AlertTriangle, RefreshCw, Sparkles } from "lucide-react";
+import { AlertTriangle, CheckCircle2, MessageCircleQuestion, RefreshCw, Send, Sparkles } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { btnPrimary, Card, PanelTitle } from "./ui";
 
 /* ── North Mini analysis panel ───────────────────────────────────────────
    Every "analysis" surface in the product renders through this component:
-   the page supplies the computed stats (counts, severities, series), and the
-   North Mini model — via the project's AI gateway — produces the actual
-   analysis text. No local template narratives: the model is the analyst. */
+   the page supplies the computed stats (counts, severities, series, dataset
+   dossiers), and the North Mini model — via the project's AI gateway —
+   produces the actual analysis text. No local template narratives: the model
+   is the analyst. Every figure it writes is verified server-side against the
+   supplied data; unverifiable figures are reported back for correction. */
 
 type Status = "idle" | "running" | "done" | "error";
 type Args = { task: string; context: string; question?: string };
-type AnalysisResult = { ok: boolean; text: string; model: string; credits?: number; error?: string };
+type AnalysisResult = {
+  ok: boolean;
+  text: string;
+  model: string;
+  credits?: number;
+  error?: string;
+  unverified?: string[];
+  figuresChecked?: number;
+};
 
 export function AiAnalysis({
   task,
@@ -22,6 +32,7 @@ export function AiAnalysis({
   title,
   sub,
   auto = false,
+  followUp = false,
   className = "",
 }: {
   /** What is being analysed, e.g. "portfolio risk overview". */
@@ -34,12 +45,17 @@ export function AiAnalysis({
   sub?: string;
   /** Run once on mount instead of waiting for the button. */
   auto?: boolean;
+  /** Show an "ask the model" input for follow-up questions over this context. */
+  followUp?: boolean;
   className?: string;
 }) {
   const analyze = useAction(api.ai.analyze);
   const [status, setStatus] = useState<Status>(auto ? "running" : "idle");
   const [text, setText] = useState("");
   const [error, setError] = useState("");
+  const [unverified, setUnverified] = useState<string[]>([]);
+  const [checked, setChecked] = useState<number | undefined>(undefined);
+  const [ask, setAsk] = useState("");
 
   // Latest props live in a ref so `run`/`buildArgs` stay stable — otherwise an
   // auto-run effect would re-fire on every re-render of the page. The ref is
@@ -50,10 +66,10 @@ export function AiAnalysis({
   });
 
   const buildArgs = useCallback(
-    (): Args => ({
+    (q?: string): Args => ({
       task: argsRef.current.task,
       context: JSON.stringify(argsRef.current.context).slice(0, 60_000),
-      question: argsRef.current.question,
+      question: q ?? argsRef.current.question,
     }),
     [],
   );
@@ -61,6 +77,8 @@ export function AiAnalysis({
   const apply = useCallback((res: AnalysisResult) => {
     if (res.ok && res.text) {
       setText(res.text);
+      setUnverified(res.unverified ?? []);
+      setChecked(res.figuresChecked);
       setStatus("done");
     } else {
       setError(res.error || "The model returned no analysis.");
@@ -68,17 +86,21 @@ export function AiAnalysis({
     }
   }, []);
 
-  /** Manual re-run (button) — event handlers may set state synchronously. */
-  const run = useCallback(async () => {
-    setStatus("running");
-    setError("");
-    try {
-      apply(await analyze(buildArgs()));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Analysis request failed.");
-      setStatus("error");
-    }
-  }, [analyze, apply, buildArgs]);
+  /** Run (button or follow-up question) — event handlers may set state synchronously. */
+  const run = useCallback(
+    async (q?: string) => {
+      setStatus("running");
+      setError("");
+      setUnverified([]);
+      try {
+        apply(await analyze(buildArgs(q)));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Analysis request failed.");
+        setStatus("error");
+      }
+    },
+    [analyze, apply, buildArgs],
+  );
 
   // Auto-run once per mount (StrictMode's repeated effect pass is ignored via
   // `started`); the result lands in promise callbacks, not in the effect body.
@@ -137,7 +159,12 @@ export function AiAnalysis({
           </div>
         )}
 
-        {status === "done" && <AiText text={text} />}
+        {status === "done" && (
+          <>
+            <FigureCheck checked={checked} unverified={unverified} busy={busy} />
+            <AiText text={text} />
+          </>
+        )}
 
         {status === "error" && (
           <div className="flex items-start gap-2.5 rounded-xl border border-[color:var(--destructive)]/35 bg-[color:var(--destructive)]/10 px-4 py-3 text-[13px] leading-6">
@@ -148,15 +175,70 @@ export function AiAnalysis({
             </p>
           </div>
         )}
+
+        {followUp && (
+          <form
+            className="mt-3 flex items-center gap-2"
+            onSubmit={(e) => {
+              e.preventDefault();
+              const q = ask.trim();
+              if (!q || busy) return;
+              setAsk("");
+              void run(q);
+            }}
+          >
+            <span className="shrink-0 text-[#c4b5fd]" title="Ask North Mini a follow-up">
+              <MessageCircleQuestion className="h-4 w-4" />
+            </span>
+            <input
+              value={ask}
+              onChange={(e) => setAsk(e.target.value)}
+              placeholder="Ask the model anything about this data…"
+              aria-label="Follow-up question for the AI analysis"
+              className="w-full rounded-lg border border-input bg-[color:var(--glass-hi)] px-2.5 py-1.5 text-[13px] text-foreground outline-none transition-colors placeholder:text-muted-foreground/60 focus:border-[color:var(--ring)]/60"
+            />
+            <button type="submit" disabled={busy || !ask.trim()} className={cn(btnPrimary, "shrink-0 px-3 py-1.5 text-xs")}>
+              <Send className="h-3.5 w-3.5" /> Ask
+            </button>
+          </form>
+        )}
       </div>
 
       {(status === "done" || status === "error") && (
         <p className="mono border-t border-border/60 px-5 py-2 text-[10px] leading-4 text-muted-foreground">
           model: cohere/north-mini-code (North Mini) · figures are computed by the platform — the
           model interprets them
+          {typeof checked === "number" && status === "done" ? ` · ${checked} figure(s) checked` : ""}
         </p>
       )}
     </Card>
+  );
+}
+
+/** Verification strip: every cited figure was matched against the supplied data. */
+function FigureCheck({ checked, unverified, busy }: { checked?: number; unverified: string[]; busy: boolean }) {
+  if (busy) return null;
+  if (unverified.length === 0) {
+    if (typeof checked !== "number") return null;
+    return (
+      <div className="mb-3 flex items-center gap-2 rounded-lg border border-[color:var(--success)]/30 bg-[color:var(--success)]/8 px-3 py-2 text-[12px]">
+        <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-[color:var(--success)]" />
+          <span className="text-muted-foreground">
+            <span className="font-semibold text-foreground">Figures verified.</span>{" "}
+            {checked} numeric figure(s) in this analysis were matched against the supplied data.
+          </span>
+      </div>
+    );
+  }
+  return (
+    <div className="mb-3 flex items-start gap-2 rounded-lg border border-[color:var(--warning)]/35 bg-[color:var(--warning)]/10 px-3 py-2 text-[12px] leading-5">
+      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[color:var(--warning)]" />
+      <span className="text-muted-foreground">
+        <span className="font-semibold text-foreground">Unsourced figures:</span>{" "}
+        {unverified.join(", ")} could not be matched to the data — treat them with caution or
+        re-run the analysis.
+      </span>
+    </div>
   );
 }
 
